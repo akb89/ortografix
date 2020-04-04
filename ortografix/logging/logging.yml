@@ -1,0 +1,17 @@
+version: 1
+formatters:
+  brief:
+    format: '%(levelname)s - %(message)s'
+  simple:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: simple
+loggers:
+  ortografix.main:
+    level: INFO
+    handlers: [console]
+  ortografix.utils:
+    level: INFO
+    handlers: [console]
