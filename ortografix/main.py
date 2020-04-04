@@ -31,11 +31,13 @@ def _decode():
 
 def train(args):
     """Train the model."""
+    logger.info('Training model from {}'.format(args.data))
     return _train()
 
 
 def decode(args):
     """Decode the input."""
+    logger.info('Decoding input from {}'.format(args.data))
     return _decode()
 
 
