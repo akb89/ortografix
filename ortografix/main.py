@@ -64,7 +64,7 @@ def main():
     #                             help='absolute path to numpy model')
     # parser_reduce = subparsers.add_parser(
     #     'reduce', formatter_class=argparse.RawTextHelpFormatter,
-    #     help='align numpy model vocabularies. Will also align the .npy models')
+    #     help='align numpy model vocabularies.')
     # parser_reduce.set_defaults(func=_align_vocabs_and_models)
     # parser_reduce.add_argument('-i', '--model-dir', required=True,
     #                            help='absolute path to .npy models '
