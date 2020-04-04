@@ -1,7 +1,7 @@
 # ortografix
 [![GitHub release][release-image]][release-url]
 [![PyPI release][pypi-image]][pypi-url]
-[![Build][ci-image]][build-url]
+[![Build][build-image]][build-url]
 [![MIT License][license-image]][license-url]
 
 
