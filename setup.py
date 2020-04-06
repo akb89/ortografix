@@ -31,7 +31,7 @@ setup(
             'ortografix = ortografix.main:main'
         ],
     },
-    install_requires=['pyyaml>=4.2b1'],
+    install_requires=['pyyaml>=4.2b1', 'torch==1.4.0', 'torchvision==0.5.0'],
     classifiers=['Development Status :: 2 - Pre-Alpha',
                  'Environment :: Web Environment',
                  'Intended Audience :: Developers',
