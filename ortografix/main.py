@@ -18,7 +18,7 @@ logging.config.dictConfig(
 logger = logging.getLogger(__name__)
 
 
-__all__ = ('train', 'decode')
+__all__ = ('train', 'decode', 'evaluate')
 
 
 def _train():
@@ -39,6 +39,11 @@ def decode(args):
     """Decode the input."""
     logger.info('Decoding input from {}'.format(args.data))
     return _decode()
+
+
+def evaluate(args):
+    """Evaluate a given model on a test set."""
+    pass
 
 
 def main():
