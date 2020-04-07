@@ -2,6 +2,10 @@
 
 import torch
 
+import ortografix.utils.constants as const
+
+__all__ = ('Decoder')
+
 
 # pylint: disable=R0902
 class Decoder(torch.nn.Module):
