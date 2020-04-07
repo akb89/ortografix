@@ -8,7 +8,7 @@ __all__ = ('time_since')
 def as_minutes(s):
     m = math.floor(s / 60)
     s -= m * 60
-    return '{} {}'.format(m, s)
+    return '{}m {}s'.format(m, round(s))
 
 
 def time_since(since, percent):
