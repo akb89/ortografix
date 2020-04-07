@@ -12,7 +12,7 @@ class Decoder(torch.nn.Module):
     """Decoder class."""
 
     def __init__(self, model_type, hidden_size, output_size, num_layers=1,
-                 nonlinearity='tanh', bias=True, batch_first=False, dropout=0,
+                 nonlinearity='tanh', bias=True, dropout=0,
                  bidirectional=False):
         """Initialize decoder model."""
         if model_type not in ['rnn', 'gru', 'lstm']:
@@ -24,17 +24,17 @@ class Decoder(torch.nn.Module):
         if self.model_type == 'rnn':
             self.rnn = torch.nn.RNN(
                 input_size=hidden_size, hidden_size=hidden_size,
-                num_layers=num_layers, bias=bias, batch_first=batch_first,
+                num_layers=num_layers, bias=bias, batch_first=False,
                 dropout=dropout, bidirectional=bidirectional)
         if self.model_type == 'gru':
             self.gru = torch.nn.GRU(
                 input_size=hidden_size, hidden_size=hidden_size,
-                num_layers=num_layers, bias=bias, batch_first=batch_first,
+                num_layers=num_layers, bias=bias, batch_first=False,
                 dropout=dropout, bidirectional=bidirectional)
         if self.model_type == 'lstm':
             self.lstm = torch.nn.LSTM(
                 input_size=hidden_size, hidden_size=hidden_size,
-                num_layers=num_layers, bias=bias, batch_first=batch_first,
+                num_layers=num_layers, bias=bias, batch_first=False,
                 dropout=dropout, bidirectional=bidirectional)
         self.out = torch.nn.Linear(hidden_size, output_size)
         self.softmax = torch.nn.LogSoftmax(dim=1)

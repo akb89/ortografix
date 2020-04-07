@@ -22,9 +22,9 @@ def prepare_token_based_source_target_indexes(input_stream, source_dict,
         if len(source_tokens) > max_seq_len \
          or len(target_tokens) > max_seq_len:
             continue
-        source_tokens.preprend(const.SOS)
+        source_tokens = [const.SOS] + source_tokens  # prepend value
         source_tokens.append(const.EOS)
-        target_tokens.preprend(const.SOS)
+        target_tokens = [const.SOS] + target_tokens  # prepend value
         target_tokens.append(const.EOS)
         source_indexes = [source_dict[token] for token in source_tokens]
         target_indexes = [target_dict[token] for token in target_tokens]
@@ -44,9 +44,9 @@ def prepare_character_based_source_target_indexes(input_stream, source_dict,
         target_sent = line.split('\t')[1]
         source_tokens = source_sent.split()
         target_tokens = target_sent.split()
-        # source_tokens.preprend(const.SOS)
+        # source_tokens.prepend(const.SOS)
         # source_tokens.append(const.EOS)
-        # target_tokens.preprend(const.SOS)
+        # target_tokens.prepend(const.SOS)
         # target_tokens.append(const.EOS)
         if len(source_tokens) != len(target_tokens):
             raise Exception(

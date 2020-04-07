@@ -6,6 +6,7 @@ import os
 
 import argparse
 import random
+import time
 import logging
 import logging.config
 
@@ -14,6 +15,7 @@ from torch import optim
 
 import ortografix.utils.config as cutils
 import ortografix.utils.constants as const
+import ortografix.utils.time as tutils
 
 from ortografix.model.encoder import Encoder
 from ortografix.model.decoder import Decoder
@@ -38,11 +40,12 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
     decoder_optimizer.zero_grad()
     input_length = source_tensor.size(0)
     target_length = target_tensor.size(0)
-    encoder_outputs = torch.zeros(max_seq_len, encoder.hidden_size,
+    # add 2 to max_seq_len to include SOS and EOS
+    encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size,
                                   device=const.DEVICE)
     loss = 0
     for ei in range(input_length):
-        encoder_output, encoder_hidden = encoder(input_tensor[ei],
+        encoder_output, encoder_hidden = encoder(source_tensor[ei],
                                                  encoder_hidden)
         encoder_outputs[ei] = encoder_output[0, 0]
     decoder_input = torch.tensor([[const.SOS_idx]], device=const.DEVICE)
@@ -51,20 +54,20 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
     if use_teacher_forcing:
         # Teacher forcing: Feed the target as the next input
         for di in range(target_length):
-            decoder_output, decoder_hidden, decoder_attention = decoder(
-                decoder_input, decoder_hidden, encoder_outputs)
+            decoder_output, decoder_hidden = decoder(
+                decoder_input, decoder_hidden)
             loss += criterion(decoder_output, target_tensor[di])
             decoder_input = target_tensor[di]  # Teacher forcing
     else:
         # Without teacher forcing: use its own predictions as the next input
         for di in range(target_length):
-            decoder_output, decoder_hidden, decoder_attention = decoder(
-                decoder_input, decoder_hidden, encoder_outputs)
-            topv, topi = decoder_output.topk(1)
+            decoder_output, decoder_hidden = decoder(
+                decoder_input, decoder_hidden)
+            _, topi = decoder_output.topk(1)
             # detach from history as input
             decoder_input = topi.squeeze().detach()
             loss += criterion(decoder_output, target_tensor[di])
-            if decoder_input.item() == EOS_token:
+            if decoder_input.item() == const.EOS_idx:
                 break
     loss.backward()
     encoder_optimizer.step()
@@ -72,7 +75,8 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
     return loss.item() / target_length
 
 
-def _train(encoder, decoder, dataset, num_epochs, learning_rate, print_every):
+def _train(encoder, decoder, dataset, num_epochs, learning_rate, print_every,
+           use_teacher_forcing, teacher_forcing_ratio):
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
     criterion = torch.nn.NLLLoss()
@@ -93,10 +97,10 @@ def _train(encoder, decoder, dataset, num_epochs, learning_rate, print_every):
                 print_loss_total = 0
                 time_info = tutils.time_since(start,
                                               num_iter / num_total_iters)
-                logger.info('{} ({} {}%) {}'
-                            .format(time_info, num_iter,
-                                    num_iter / num_total_iters * 100,
-                                    print_loss_avg))
+                logger.info('Epoch {}/{} {} ({} {}%) {}'
+                            .format(epoch, num_epochs, time_info, num_iter,
+                                    round(num_iter / num_total_iters * 100),
+                                    round(print_loss_avg, 4)))
 
 
 def _decode():
@@ -112,19 +116,19 @@ def train(args):
                       input_size=dataset.source_vocab_size,
                       hidden_size=args.hidden_size,
                       num_layers=args.num_layers,
-                      nonlinearity='args.nonlinearity,
-                      bias=args.bias, batch_first=args.batch_first,
-                      dropout=args.dropout,
+                      nonlinearity=args.nonlinearity,
+                      bias=args.bias, dropout=args.dropout,
                       bidirectional=args.bidirectional).to(const.DEVICE)
     decoder = Decoder(model_type=args.model_type,
                       hidden_size=args.hidden_size,
                       output_size=dataset.target_vocab_size,
                       num_layers=args.num_layers,
-                      nonlinearity='args.nonlinearity,
-                      bias=args.bias, batch_first=args.batch_first,
-                      dropout=args.dropout,
+                      nonlinearity=args.nonlinearity,
+                      bias=args.bias, dropout=args.dropout,
                       bidirectional=args.bidirectional).to(const.DEVICE)
-    return _train(encoder, decoder, dataset, args.learning_rate)
+    return _train(encoder, decoder, dataset, args.epochs, args.learning_rate,
+                  args.print_every, args.use_teacher_forcing,
+                  args.teacher_forcing_ratio)
 
 
 def decode(args):
@@ -144,33 +148,53 @@ def main():
     subparsers = parser.add_subparsers()
     parser_train = subparsers.add_parser(
         'train', formatter_class=argparse.RawTextHelpFormatter,
-        help='train')
+        help='train the seq2seq model')
     parser_train.set_defaults(func=train)
-    # parser_extract.add_argument('-v', '--vectors', required=True,
-    #                             help='input vectors in txt format')
-    parser_decode = subparsers.add_parser(
-        'decode', formatter_class=argparse.RawTextHelpFormatter,
-        help='decode input string: convert to simplified ortography')
-    parser_decode.set_defaults(func=decode)
-    # parser_convert.add_argument('-w', '--what', required=True,
-    #                             choices=['bert', 'numpy'],
-    #                             help='absolute path to vocabulary')
-    # parser_convert.add_argument('-v', '--vocab', required=True,
-    #                             help='absolute path to vocabulary')
-    # parser_convert.add_argument('-m', '--model',
-    #                             help='absolute path to numpy model')
-    # parser_reduce = subparsers.add_parser(
-    #     'reduce', formatter_class=argparse.RawTextHelpFormatter,
-    #     help='align numpy model vocabularies.')
-    # parser_reduce.set_defaults(func=_align_vocabs_and_models)
-    # parser_reduce.add_argument('-i', '--model-dir', required=True,
-    #                            help='absolute path to .npy models '
-    #                                 'directory. The directory should '
-    #                                 'contain the .vocab file '
-    #                                 'corresponding to the .npy model.')
-    # parser_reduce.add_argument('-t', '--export-to-text',
-    #                            action='store_true',
-    #                            help='if passed, will also export models'
-    #                                 'to .text format')
+    parser_train.add_argument('-d', '--data', required=True,
+                              help='absolute path to training data')
+    parser_train.add_argument('-t', '--model-type',
+                              choices=['rnn', 'gru', 'lstm'],
+                              default='gru',
+                              help='encoder/decoder model type')
+    parser_train.add_argument('-c', '--character-based', action='store_true',
+                              help='if set, will switch from token-based to '
+                                   'character-based model. To be used only '
+                                   'for ortographic simplification, not '
+                                   'neural machine translation')
+    parser_train.add_argument('-s', '--shuffle', action='store_true',
+                              help='if set, will shuffle the training data')
+    parser_train.add_argument('-m', '--max-seq-len', type=int, default=10,
+                              help='maximum sequence length to retain')
+    parser_train.add_argument('-z', '--hidden-size', type=int, default=256,
+                              help='size of the hidden layer')
+    parser_train.add_argument('-n', '--num-layers', type=int, default=1,
+                              help='number of layers to stack in the '
+                                   'encoder/decoder models')
+    parser_train.add_argument('-l', '--nonlinearity', choices=['tanh', 'relu'],
+                              default='tanh', help='activation function to '
+                                                   'use. For RNN model only')
+    parser_train.add_argument('-b', '--bias', action='store_true',
+                              help='whether or not to use biases in '
+                                   'encoder/decoder models')
+    parser_train.add_argument('-o', '--dropout', type=float, default=0,
+                              help='probability in Dropout layer')
+    parser_train.add_argument('-i', '--bidirectional', action='store_true',
+                              help='if set, will use a bidirectional model '
+                                   'in both encoder and decoder models')
+    parser_train.add_argument('-r', '--learning-rate', type=float,
+                              default=0.01, help='learning rate')
+    parser_train.add_argument('-e', '--epochs', type=int, default=1,
+                              help='number of epochs')
+    parser_train.add_argument('-p', '--print-every', type=int, default=1000,
+                              help='how often to print out loss information')
+    parser_train.add_argument('-u', '--use-teacher-forcing',
+                              action='store_true',
+                              help='if set, will use teacher forcing')
+    parser_train.add_argument('-f', '--teacher-forcing-ratio', type=float,
+                              default=0.5, help='teacher forcing ratio')
+    # parser_decode = subparsers.add_parser(
+    #     'decode', formatter_class=argparse.RawTextHelpFormatter,
+    #     help='decode input string: convert to simplified ortography')
+    # parser_decode.set_defaults(func=decode)
     args = parser.parse_args()
     args.func(args)
