@@ -6,7 +6,7 @@ import ortografix.utils.constants as const
 
 logger = logging.getLogger(__name__)
 
-__all__ = ('prepare_source_target_dict', 'prepare_source_target_indexes')
+__all__ = ('prepare_source_target_dict', 'prepare_indexed_pairs')
 
 
 def prepare_token_based_source_target_indexes(input_stream, source_dict,
@@ -89,8 +89,8 @@ def prepare_character_based_source_target_indexes(input_stream, source_dict,
     return source_target_indexes
 
 
-def prepare_source_target_indexes(data_filepath, source_dict, target_dict,
-                                  character_based, max_seq_len):
+def prepare_indexed_pairs(data_filepath, source_dict, target_dict,
+                          character_based, max_seq_len):
     with open(data_filepath, 'r', encoding='utf-8') as input_stream:
         if character_based:
             return prepare_character_based_source_target_indexes(

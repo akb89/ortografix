@@ -1,10 +1,14 @@
 """Simple Decoder without Attention."""
+import os
+import logging
 
 import torch
 
 import ortografix.utils.constants as const
 
 __all__ = ('Decoder')
+
+logger = logging.getLogger(__name__)
 
 
 # pylint: disable=R0902
@@ -20,6 +24,12 @@ class Decoder(torch.nn.Module):
         super(Decoder, self).__init__()
         self.model_type = model_type
         self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.num_layers = num_layers
+        self.nonlinearity = nonlinearity
+        self.bias = bias
+        self.dropout = dropout
+        self.bidirectional = bidirectional
         self.embedding = torch.nn.Embedding(output_size, hidden_size)
         if self.model_type == 'rnn':
             self.rnn = torch.nn.RNN(

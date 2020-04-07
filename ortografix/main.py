@@ -75,8 +75,41 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
     return loss.item() / target_length
 
 
+def save_dataset_and_models(output_dirpath, dataset, encoder, decoder, loss,
+                            learning_rate):
+    logger.info('Saving dataset and models...')
+    dataset.save_params(output_dirpath)
+    # encoder.save_params(output_dirpath)
+    # decoder.save_params(output_dirpath)
+    logger.info('Saving encoder/decoder models...')
+    torch.save({'encoder_state_dict': encoder.state_dict(),
+                'decoder_state_dict': decoder.state_dict(),
+                'encoder': {
+                    'model_type': encoder.model_type,
+                    'input_size': encoder.input_size,
+                    'hidden_size': encoder.hidden_size,
+                    'num_layers': encoder.num_layers,
+                    'nonlinearity': encoder.nonlinearity,
+                    'bias': encoder.bias,
+                    'dropout': encoder.dropout,
+                    'bidirectional': encoder.bidirectional
+                },
+                'decoder': {
+                    'model_type': decoder.model_type,
+                    'output_size': decoder.output_size,
+                    'hidden_size': decoder.hidden_size,
+                    'num_layers': decoder.num_layers,
+                    'nonlinearity': decoder.nonlinearity,
+                    'bias': decoder.bias,
+                    'dropout': decoder.dropout,
+                    'bidirectional': decoder.bidirectional
+                },
+                'loss': loss,
+                'learning_rate': learning_rate},
+               os.path.join(output_dirpath, 'checkpoint.model'))
+
 def _train(encoder, decoder, dataset, num_epochs, learning_rate, print_every,
-           use_teacher_forcing, teacher_forcing_ratio):
+           use_teacher_forcing, teacher_forcing_ratio, output_dirpath):
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
     criterion = torch.nn.NLLLoss()
@@ -84,27 +117,30 @@ def _train(encoder, decoder, dataset, num_epochs, learning_rate, print_every,
     print_loss_total = 0  # Reset every print_every
     num_iter = 0
     num_total_iters = len(dataset.source_target_indexes) * num_epochs
-    for epoch in range(1, num_epochs+1):
-        for source_tensor, target_tensor in dataset.prepare_source_target_tensors():
-            num_iter += 1
-            loss = _train_single_batch(
-                source_tensor, target_tensor, encoder, decoder,
-                encoder_optimizer, decoder_optimizer, dataset.max_seq_len,
-                criterion, use_teacher_forcing, teacher_forcing_ratio)
-            print_loss_total = loss
-            if num_iter % print_every == 0:
-                print_loss_avg = print_loss_total / print_every
-                print_loss_total = 0
-                time_info = tutils.time_since(start,
-                                              num_iter / num_total_iters)
-                logger.info('Epoch {}/{} {} ({} {}%) {}'
-                            .format(epoch, num_epochs, time_info, num_iter,
-                                    round(num_iter / num_total_iters * 100),
-                                    round(print_loss_avg, 4)))
-
-
-def _decode():
-    pass
+    try:
+        for epoch in range(1, num_epochs+1):
+            for source_tensor, target_tensor in dataset.input_tensors():
+                num_iter += 1
+                loss = _train_single_batch(
+                    source_tensor, target_tensor, encoder, decoder,
+                    encoder_optimizer, decoder_optimizer, dataset.max_seq_len,
+                    criterion, use_teacher_forcing, teacher_forcing_ratio)
+                print_loss_total = loss
+                if num_iter % print_every == 0:
+                    print_loss_avg = print_loss_total / print_every
+                    print_loss_total = 0
+                    time_info = tutils.time_since(start,
+                                                  num_iter / num_total_iters)
+                    logger.info('Epoch {}/{} {} ({} {}%) {}'
+                                .format(epoch, num_epochs, time_info, num_iter,
+                                        round(num_iter / num_total_iters * 100),
+                                        round(print_loss_avg, 4)))
+        save_dataset_and_models(output_dirpath, dataset, encoder, decoder,
+                                loss, learning_rate)
+    except KeyboardInterrupt:
+        logger.info('Training interrupted')
+        save_dataset_and_models(output_dirpath, dataset, encoder, decoder,
+                                loss, learning_rate)
 
 
 def train(args):
@@ -128,13 +164,41 @@ def train(args):
                       bidirectional=args.bidirectional).to(const.DEVICE)
     return _train(encoder, decoder, dataset, args.epochs, args.learning_rate,
                   args.print_every, args.use_teacher_forcing,
-                  args.teacher_forcing_ratio)
+                  args.teacher_forcing_ratio, args.output_dirpath)
+
+
+def _decode(sequence, encoder, decoder):
+    pass
+    # with torch.no_grad():
+    #     source_tensor = decode()
 
 
 def decode(args):
     """Decode the input."""
-    logger.info('Decoding input from {}'.format(args.data))
-    return _decode()
+    logger.info('Decoding input sequence: {}'.format(args.sequence))
+    checkpoint_filepath = os.path.join(args.model, 'checkpoint.model')
+    checkpoint = torch.load(checkpoint_filepath)
+    encoder = Encoder(model_type=checkpoint['encoder']['model_type'],
+                      input_size=checkpoint['encoder']['input_size'],
+                      hidden_size=checkpoint['encoder']['hidden_size'],
+                      num_layers=checkpoint['encoder']['num_layers'],
+                      nonlinearity=checkpoint['encoder']['nonlinearity'],
+                      bias=checkpoint['encoder']['bias'],
+                      dropout=checkpoint['encoder']['dropout'],
+                      bidirectional=checkpoint['encoder']['bidirectional'])
+    encoder.load_state_dict(checkpoint['encoder_state_dict'])
+    encoder.eval()
+    decoder = Decoder(model_type=checkpoint['decoder']['model_type'],
+                      hidden_size=checkpoint['decoder']['hidden_size'],
+                      output_size=checkpoint['decoder']['output_size'],
+                      num_layers=checkpoint['decoder']['num_layers'],
+                      nonlinearity=checkpoint['decoder']['nonlinearity'],
+                      bias=checkpoint['decoder']['bias'],
+                      dropout=checkpoint['decoder']['dropout'],
+                      bidirectional=checkpoint['decoder']['bidirectional'])
+    decoder.load_state_dict(checkpoint['decoder_state_dict'])
+    decoder.eval()
+    # return _decode(args.sequence, encoder, decoder)
 
 
 def evaluate(args):
@@ -192,9 +256,15 @@ def main():
                               help='if set, will use teacher forcing')
     parser_train.add_argument('-f', '--teacher-forcing-ratio', type=float,
                               default=0.5, help='teacher forcing ratio')
-    # parser_decode = subparsers.add_parser(
-    #     'decode', formatter_class=argparse.RawTextHelpFormatter,
-    #     help='decode input string: convert to simplified ortography')
-    # parser_decode.set_defaults(func=decode)
+    parser_train.add_argument('-a', '--output-dirpath', required=True,
+                              help='absolute dirpath where to save models')
+    parser_decode = subparsers.add_parser(
+        'decode', formatter_class=argparse.RawTextHelpFormatter,
+        help='decode input sequence')
+    parser_decode.set_defaults(func=decode)
+    parser_decode.add_argument('-m', '--model', required=True,
+                               help='absolute path to model directory')
+    parser_decode.add_argument('-s', '--sequence', required=True,
+                               help='string sequence to decode')
     args = parser.parse_args()
     args.func(args)
