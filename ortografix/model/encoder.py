@@ -2,6 +2,10 @@
 
 import torch
 
+import ortografix.utils.constants as const
+
+__all__ = ('Encoder')
+
 
 class Encoder(torch.nn.Module):
     """Encoder class."""
