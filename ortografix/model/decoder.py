@@ -33,8 +33,9 @@ class Decoder(torch.nn.Module):
         if self.model_type == 'rnn':
             self.rnn = torch.nn.RNN(
                 input_size=hidden_size, hidden_size=hidden_size,
-                num_layers=num_layers, bias=bias, batch_first=False,
-                dropout=dropout, bidirectional=bidirectional)
+                num_layers=num_layers, nonlinearity=nonlinearity,
+                bias=bias, batch_first=False, dropout=dropout,
+                bidirectional=bidirectional)
         if self.model_type == 'gru':
             self.gru = torch.nn.GRU(
                 input_size=hidden_size, hidden_size=hidden_size,

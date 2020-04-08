@@ -46,8 +46,8 @@ class Vocab():
 class Dataset():
     """A dataset class to return source/target tensors from training data."""
 
-    def __init__(self, data_filepath, is_character_based=False, shuffle=True,
-                 max_seq_len=10):
+    def __init__(self, data_filepath, is_character_based, shuffle,
+                 max_seq_len):
         """Prepare input tensors.
 
         Prepare dictionaries for source and target items.

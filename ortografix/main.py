@@ -18,6 +18,7 @@ import ortografix.utils.constants as const
 import ortografix.utils.time as tutils
 import ortografix.utils.processing as putils
 
+from ortografix.model.attention import Attention
 from ortografix.model.encoder import Encoder
 from ortografix.model.decoder import Decoder
 from ortografix.model.dataset import Dataset, Vocab
@@ -33,51 +34,8 @@ logger = logging.getLogger(__name__)
 __all__ = ('train', 'evaluate')
 
 
-def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
-                        encoder_optimizer, decoder_optimizer, max_seq_len,
-                        criterion, use_teacher_forcing, teacher_forcing_ratio):
-    encoder_hidden = encoder.init_hidden()
-    encoder_optimizer.zero_grad()
-    decoder_optimizer.zero_grad()
-    input_length = source_tensor.size(0)
-    target_length = target_tensor.size(0)
-    # add 2 to max_seq_len to include SOS and EOS
-    encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size,
-                                  device=const.DEVICE)
-    loss = 0
-    for ei in range(input_length):
-        encoder_output, encoder_hidden = encoder(source_tensor[ei],
-                                                 encoder_hidden)
-        encoder_outputs[ei] = encoder_output[0, 0]
-    decoder_input = torch.tensor([[const.SOS_IDX]], device=const.DEVICE)
-    decoder_hidden = encoder_hidden
-    use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
-    if use_teacher_forcing:
-        # Teacher forcing: Feed the target as the next input
-        for di in range(target_length):
-            decoder_output, decoder_hidden = decoder(
-                decoder_input, decoder_hidden)
-            loss += criterion(decoder_output, target_tensor[di])
-            decoder_input = target_tensor[di]  # Teacher forcing
-    else:
-        # Without teacher forcing: use its own predictions as the next input
-        for di in range(target_length):
-            decoder_output, decoder_hidden = decoder(
-                decoder_input, decoder_hidden)
-            _, topi = decoder_output.topk(1)
-            # detach from history as input
-            decoder_input = topi.squeeze().detach()
-            loss += criterion(decoder_output, target_tensor[di])
-            if decoder_input.item() == const.EOS_IDX:
-                break
-    loss.backward()
-    encoder_optimizer.step()
-    decoder_optimizer.step()
-    return loss.item() / target_length
-
-
 def save_dataset_and_models(output_dirpath, dataset, encoder, decoder, loss,
-                            learning_rate):
+                            learning_rate, with_attention):
     logger.info('Saving dataset and models...')
     dataset.save_params(output_dirpath)
     torch.save({'encoder_state_dict': encoder.state_dict(),
@@ -102,12 +60,67 @@ def save_dataset_and_models(output_dirpath, dataset, encoder, decoder, loss,
                     'dropout': decoder.dropout,
                     'bidirectional': decoder.bidirectional
                 },
+                'with_attention': with_attention,
                 'loss': loss,
                 'learning_rate': learning_rate},
                os.path.join(output_dirpath, 'checkpoint.model'))
 
-def _train(encoder, decoder, dataset, num_epochs, learning_rate, print_every,
-           use_teacher_forcing, teacher_forcing_ratio, output_dirpath):
+
+def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
+                        with_attention, encoder_optimizer, decoder_optimizer,
+                        max_seq_len, criterion, use_teacher_forcing,
+                        teacher_forcing_ratio):
+    encoder_hidden = encoder.init_hidden()
+    encoder_optimizer.zero_grad()
+    decoder_optimizer.zero_grad()
+    input_length = source_tensor.size(0)
+    target_length = target_tensor.size(0)
+    # add 2 to max_seq_len to include SOS and EOS
+    encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size,
+                                  device=const.DEVICE)
+    loss = 0
+    for ei in range(input_length):
+        encoder_output, encoder_hidden = encoder(source_tensor[ei],
+                                                 encoder_hidden)
+        encoder_outputs[ei] = encoder_output[0, 0]
+    decoder_input = torch.tensor([[const.SOS_IDX]], device=const.DEVICE)
+    decoder_hidden = encoder_hidden
+    use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
+    if use_teacher_forcing:
+        # Teacher forcing: Feed the target as the next input
+        for di in range(target_length):
+            if with_attention:
+                decoder_output, decoder_hidden, decoder_attention = decoder(
+                    decoder_input, decoder_hidden, encoder_outputs)
+            else:
+                decoder_output, decoder_hidden = decoder(
+                    decoder_input, decoder_hidden)
+            loss += criterion(decoder_output, target_tensor[di])
+            decoder_input = target_tensor[di]  # Teacher forcing
+    else:
+        # Without teacher forcing: use its own predictions as the next input
+        for di in range(target_length):
+            if with_attention:
+                decoder_output, decoder_hidden, decoder_attention = decoder(
+                    decoder_input, decoder_hidden, encoder_outputs)
+            else:
+                decoder_output, decoder_hidden = decoder(
+                    decoder_input, decoder_hidden)
+            _, topi = decoder_output.topk(1)
+            # detach from history as input
+            decoder_input = topi.squeeze().detach()
+            loss += criterion(decoder_output, target_tensor[di])
+            if decoder_input.item() == const.EOS_IDX:
+                break
+    loss.backward()
+    encoder_optimizer.step()
+    decoder_optimizer.step()
+    return loss.item() / target_length
+
+
+def _train(encoder, decoder, dataset, with_attention, num_epochs,
+           learning_rate, print_every, use_teacher_forcing,
+           teacher_forcing_ratio, output_dirpath):
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
     criterion = torch.nn.NLLLoss()
@@ -116,6 +129,7 @@ def _train(encoder, decoder, dataset, num_epochs, learning_rate, print_every,
     num_iter = 0
     num_total_iters = len(dataset.indexes) * num_epochs
     try:
+        logger.info('Starting training...')
         for epoch in range(1, num_epochs+1):
             for source_indexes, target_indexes in dataset.indexes:
                 source_tensor = torch.tensor(source_indexes, dtype=torch.long,
@@ -125,8 +139,9 @@ def _train(encoder, decoder, dataset, num_epochs, learning_rate, print_every,
                 num_iter += 1
                 loss = _train_single_batch(
                     source_tensor, target_tensor, encoder, decoder,
-                    encoder_optimizer, decoder_optimizer, dataset.max_seq_len,
-                    criterion, use_teacher_forcing, teacher_forcing_ratio)
+                    with_attention, encoder_optimizer, decoder_optimizer,
+                    dataset.max_seq_len, criterion, use_teacher_forcing,
+                    teacher_forcing_ratio)
                 print_loss_total = loss
                 if num_iter % print_every == 0:
                     print_loss_avg = print_loss_total / print_every
@@ -138,11 +153,11 @@ def _train(encoder, decoder, dataset, num_epochs, learning_rate, print_every,
                                         round(num_iter / num_total_iters * 100),
                                         round(print_loss_avg, 4)))
         save_dataset_and_models(output_dirpath, dataset, encoder, decoder,
-                                loss, learning_rate)
+                                loss, learning_rate, with_attention)
     except KeyboardInterrupt:
         logger.info('Training interrupted')
         save_dataset_and_models(output_dirpath, dataset, encoder, decoder,
-                                loss, learning_rate)
+                                loss, learning_rate, with_attention)
 
 
 def train(args):
@@ -157,19 +172,30 @@ def train(args):
                       nonlinearity=args.nonlinearity,
                       bias=args.bias, dropout=args.dropout,
                       bidirectional=args.bidirectional).to(const.DEVICE)
-    decoder = Decoder(model_type=args.model_type,
-                      hidden_size=args.hidden_size,
-                      output_size=dataset.target_vocab.size,
-                      num_layers=args.num_layers,
-                      nonlinearity=args.nonlinearity,
-                      bias=args.bias, dropout=args.dropout,
-                      bidirectional=args.bidirectional).to(const.DEVICE)
-    return _train(encoder, decoder, dataset, args.epochs, args.learning_rate,
-                  args.print_every, args.use_teacher_forcing,
-                  args.teacher_forcing_ratio, args.output_dirpath)
+    if args.with_attention:
+        decoder = Attention(model_type=args.model_type,
+                            hidden_size=args.hidden_size,
+                            output_size=dataset.target_vocab.size,
+                            max_seq_len=args.max_seq_len,
+                            num_layers=args.num_layers,
+                            nonlinearity=args.nonlinearity,
+                            bias=args.bias, dropout=args.dropout,
+                            bidirectional=args.bidirectional).to(const.DEVICE)
+    else:
+        decoder = Decoder(model_type=args.model_type,
+                          hidden_size=args.hidden_size,
+                          output_size=dataset.target_vocab.size,
+                          num_layers=args.num_layers,
+                          nonlinearity=args.nonlinearity,
+                          bias=args.bias, dropout=args.dropout,
+                          bidirectional=args.bidirectional).to(const.DEVICE)
+    return _train(encoder, decoder, dataset, args.with_attention, args.epochs,
+                  args.learning_rate, args.print_every,
+                  args.use_teacher_forcing, args.teacher_forcing_ratio,
+                  args.output_dirpath)
 
 
-def _decode(source_indexes, encoder, decoder, max_seq_len):
+def _decode(source_indexes, encoder, decoder, with_attention, max_seq_len):
     with torch.no_grad():
         input_tensor = torch.tensor(source_indexes, dtype=torch.long,
                                     device=const.DEVICE).view(-1, 1)
@@ -185,52 +211,23 @@ def _decode(source_indexes, encoder, decoder, max_seq_len):
         decoder_input = torch.tensor([[const.SOS_IDX]], device=const.DEVICE)
         decoder_hidden = encoder_hidden
         decoded_indexes = []
-        for _ in range(max_seq_len):
-            decoder_output, decoder_hidden = decoder(decoder_input,
-                                                     decoder_hidden)
+        # add 2 to max_seq_len to include SOS and EOS
+        decoder_attentions = torch.zeros(max_seq_len+2, max_seq_len+2)
+        for di in range(max_seq_len+2):
+            if with_attention:
+                decoder_output, decoder_hidden, decoder_attention = decoder(
+                    decoder_input, decoder_hidden, encoder_outputs)
+                decoder_attentions[di] = decoder_attention.data
+            else:
+                decoder_output, decoder_hidden = decoder(decoder_input,
+                                                         decoder_hidden)
             _, topi = decoder_output.data.topk(1)
             if topi.item() == const.EOS_IDX:
                 decoded_indexes.append(const.EOS_IDX)
                 break
             decoded_indexes.append(topi.item())
             decoder_input = topi.squeeze().detach()
-        return decoded_indexes
-
-
-# def decode(args):
-#     """Decode the input."""
-#     logger.info('Decoding input sequence: {}'.format(args.sequence))
-#     dataset_param_filepath = os.path.join(args.model, 'dataset.params')
-#     dataset_params = putils.load_params(dataset_param_filepath)
-#     source_vocab_filepath = os.path.join(args.model, 'source.vocab')
-#     # source_vocab = putils.load_vocab(source_vocab_filepath)
-#     target_vocab_filepath = os.path.join(args.model, 'target.vocab')
-#     # target_vocab = putils.load_vocab(target_vocab_filepath)
-#     checkpoint_filepath = os.path.join(args.model, 'checkpoint.model')
-#     checkpoint = torch.load(checkpoint_filepath)
-#     encoder = Encoder(model_type=checkpoint['encoder']['model_type'],
-#                       input_size=checkpoint['encoder']['input_size'],
-#                       hidden_size=checkpoint['encoder']['hidden_size'],
-#                       num_layers=checkpoint['encoder']['num_layers'],
-#                       nonlinearity=checkpoint['encoder']['nonlinearity'],
-#                       bias=checkpoint['encoder']['bias'],
-#                       dropout=checkpoint['encoder']['dropout'],
-#                       bidirectional=checkpoint['encoder']['bidirectional'])
-#     encoder.load_state_dict(checkpoint['encoder_state_dict'])
-#     encoder.eval()
-#     decoder = Decoder(model_type=checkpoint['decoder']['model_type'],
-#                       hidden_size=checkpoint['decoder']['hidden_size'],
-#                       output_size=checkpoint['decoder']['output_size'],
-#                       num_layers=checkpoint['decoder']['num_layers'],
-#                       nonlinearity=checkpoint['decoder']['nonlinearity'],
-#                       bias=checkpoint['decoder']['bias'],
-#                       dropout=checkpoint['decoder']['dropout'],
-#                       bidirectional=checkpoint['decoder']['bidirectional'])
-#     decoder.load_state_dict(checkpoint['decoder_state_dict'])
-#     decoder.eval()
-#     return _decode(args.sequence, encoder, decoder, source_vocab, target_vocab,
-#                    dataset_params['is_character_based'],
-#                    dataset_params['max_seq_len'])
+        return decoded_indexes, decoder_attentions[:di + 1]
 
 
 def evaluate(args):
@@ -253,14 +250,25 @@ def evaluate(args):
                       bidirectional=checkpoint['encoder']['bidirectional'])
     encoder.load_state_dict(checkpoint['encoder_state_dict'])
     encoder.eval()
-    decoder = Decoder(model_type=checkpoint['decoder']['model_type'],
-                      hidden_size=checkpoint['decoder']['hidden_size'],
-                      output_size=checkpoint['decoder']['output_size'],
-                      num_layers=checkpoint['decoder']['num_layers'],
-                      nonlinearity=checkpoint['decoder']['nonlinearity'],
-                      bias=checkpoint['decoder']['bias'],
-                      dropout=checkpoint['decoder']['dropout'],
-                      bidirectional=checkpoint['decoder']['bidirectional'])
+    if checkpoint['with_attention']:
+        decoder = Attention(model_type=checkpoint['decoder']['model_type'],
+                            hidden_size=checkpoint['decoder']['hidden_size'],
+                            output_size=checkpoint['decoder']['output_size'],
+                            max_seq_len=dataset_params['max_seq_len'],
+                            num_layers=checkpoint['decoder']['num_layers'],
+                            nonlinearity=checkpoint['decoder']['nonlinearity'],
+                            bias=checkpoint['decoder']['bias'],
+                            dropout=checkpoint['decoder']['dropout'],
+                            bidirectional=checkpoint['decoder']['bidirectional'])
+    else:
+        decoder = Decoder(model_type=checkpoint['decoder']['model_type'],
+                          hidden_size=checkpoint['decoder']['hidden_size'],
+                          output_size=checkpoint['decoder']['output_size'],
+                          num_layers=checkpoint['decoder']['num_layers'],
+                          nonlinearity=checkpoint['decoder']['nonlinearity'],
+                          bias=checkpoint['decoder']['bias'],
+                          dropout=checkpoint['decoder']['dropout'],
+                          bidirectional=checkpoint['decoder']['bidirectional'])
     decoder.load_state_dict(checkpoint['decoder_state_dict'])
     decoder.eval()
     indexes = putils.index_dataset(
@@ -274,8 +282,9 @@ def evaluate(args):
             print('>', ' '.join([source_vocab.idx2item[idx] for idx in seq[0]]))
             print('=', ' '.join([target_vocab.idx2item[idx] for idx in seq[1]]))
             # TODO: add support for OOV
-            predicted_idx = _decode(seq[0], encoder, decoder,
-                                    dataset_params['max_seq_len'])
+            predicted_idx, _ = _decode(seq[0], encoder, decoder,
+                                       checkpoint['with_attention'],
+                                       dataset_params['max_seq_len'])
             print('<', ' '.join([target_vocab.idx2item[idx] for idx in predicted_idx]))
 
 
@@ -331,14 +340,8 @@ def main():
                               default=0.5, help='teacher forcing ratio')
     parser_train.add_argument('-a', '--output-dirpath', required=True,
                               help='absolute dirpath where to save models')
-    # parser_decode = subparsers.add_parser(
-    #     'decode', formatter_class=argparse.RawTextHelpFormatter,
-    #     help='decode input sequence')
-    # parser_decode.set_defaults(func=decode)
-    # parser_decode.add_argument('-m', '--model', required=True,
-    #                            help='absolute path to model directory')
-    # parser_decode.add_argument('-s', '--sequence', required=True,
-    #                            help='string sequence to decode')
+    parser_train.add_argument('-w', '--with-attention', action='store_true',
+                              help='if set, will use attention-based decoding')
     parser_evaluate = subparsers.add_parser(
         'evaluate', formatter_class=argparse.RawTextHelpFormatter,
         help='evaluate model on input test set')
@@ -350,12 +353,5 @@ def main():
     parser_evaluate.add_argument('-r', '--random', type=int, default=0,
                                  help='if > 0, will test on n sequences '
                                       'randomly selected from test set')
-    # parser_evaluate.add_argument('-c', '--character-based', action='store_true',
-    #                              help='if set, will switch from token-based to '
-    #                                   'character-based model. To be used only '
-    #                                   'for ortographic simplification, not '
-    #                                   'neural machine translation')
-    # parser_evaluate.add_argument('-m', '--max-seq-len', type=int, default=10,
-    #                              help='maximum sequence length to retain')
     args = parser.parse_args()
     args.func(args)
