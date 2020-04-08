@@ -30,7 +30,7 @@ logging.config.dictConfig(
 logger = logging.getLogger(__name__)
 
 
-__all__ = ('train', 'decode', 'evaluate')
+__all__ = ('train', 'evaluate')
 
 
 def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
