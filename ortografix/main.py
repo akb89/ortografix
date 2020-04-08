@@ -79,9 +79,6 @@ def save_dataset_and_models(output_dirpath, dataset, encoder, decoder, loss,
                             learning_rate):
     logger.info('Saving dataset and models...')
     dataset.save_params(output_dirpath)
-    # encoder.save_params(output_dirpath)
-    # decoder.save_params(output_dirpath)
-    logger.info('Saving encoder/decoder models...')
     torch.save({'encoder_state_dict': encoder.state_dict(),
                 'decoder_state_dict': decoder.state_dict(),
                 'encoder': {
@@ -116,10 +113,10 @@ def _train(encoder, decoder, dataset, num_epochs, learning_rate, print_every,
     start = time.time()
     print_loss_total = 0  # Reset every print_every
     num_iter = 0
-    num_total_iters = len(dataset.source_target_indexes) * num_epochs
+    num_total_iters = len(dataset.indexes) * num_epochs
     try:
         for epoch in range(1, num_epochs+1):
-            for source_tensor, target_tensor in dataset.input_tensors():
+            for source_tensor, target_tensor in dataset.input_tensors:
                 num_iter += 1
                 loss = _train_single_batch(
                     source_tensor, target_tensor, encoder, decoder,
@@ -149,7 +146,7 @@ def train(args):
     dataset = Dataset(args.data, args.character_based, args.shuffle,
                       args.max_seq_len)
     encoder = Encoder(model_type=args.model_type,
-                      input_size=dataset.source_vocab_size,
+                      input_size=dataset.source_vocab.size,
                       hidden_size=args.hidden_size,
                       num_layers=args.num_layers,
                       nonlinearity=args.nonlinearity,
@@ -157,7 +154,7 @@ def train(args):
                       bidirectional=args.bidirectional).to(const.DEVICE)
     decoder = Decoder(model_type=args.model_type,
                       hidden_size=args.hidden_size,
-                      output_size=dataset.target_vocab_size,
+                      output_size=dataset.target_vocab.size,
                       num_layers=args.num_layers,
                       nonlinearity=args.nonlinearity,
                       bias=args.bias, dropout=args.dropout,
@@ -167,10 +164,10 @@ def train(args):
                   args.teacher_forcing_ratio, args.output_dirpath)
 
 
-def _decode(sequence, encoder, decoder):
-    pass
-    # with torch.no_grad():
-    #     source_tensor = decode()
+def _decode(sequence, encoder, decoder, source_vocab, target_vocab):
+    with torch.no_grad():
+        pass
+        #input_tensor = decode()
 
 
 def decode(args):

@@ -1,5 +1,7 @@
 version: 1
 formatters:
+  noname:
+    format: '%(asctime)s - %(levelname)s - %(message)s'
   brief:
     format: '%(levelname)s - %(message)s'
   simple:
@@ -7,7 +9,7 @@ formatters:
 handlers:
   console:
     class: logging.StreamHandler
-    formatter: simple
+    formatter: noname
 loggers:
   ortografix.main:
     level: INFO
