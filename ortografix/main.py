@@ -16,6 +16,7 @@ from torch import optim
 import ortografix.utils.config as cutils
 import ortografix.utils.constants as const
 import ortografix.utils.time as tutils
+import ortografix.utils.processing as putils
 
 from ortografix.model.encoder import Encoder
 from ortografix.model.decoder import Decoder
@@ -164,15 +165,50 @@ def train(args):
                   args.teacher_forcing_ratio, args.output_dirpath)
 
 
-def _decode(sequence, encoder, decoder, source_vocab, target_vocab):
+def _decode(sequence, encoder, decoder, source_vocab, target_vocab,
+            is_character_based, max_seq_len):
     with torch.no_grad():
-        pass
-        #input_tensor = decode()
+        source_indexes = putils.index_sequence(
+            sequence, source_vocab.item2idx, is_character_based)
+        input_tensor = torch.tensor(source_indexes, dtype=torch.long,
+                                    device=const.DEVICE).view(-1, 1)
+        input_length = input_tensor.size()[0]
+        encoder_hidden = encoder.init_hidden()
+        encoder_outputs = torch.zeros(max_seq_len, encoder.hidden_size,
+                                      device=const.DEVICE)
+        for ei in range(input_length):
+            encoder_output, encoder_hidden = encoder(input_tensor[ei],
+                                                     encoder_hidden)
+            encoder_outputs[ei] += encoder_output[0, 0]
+        decoder_input = torch.tensor([[const.SOS_idx]], device=const.DEVICE)
+        decoder_hidden = encoder_hidden
+        decoded_words = []
+        decoder_attentions = torch.zeros(max_seq_len, max_seq_len)
+        for di in range(max_seq_len):
+            decoder_output, decoder_hidden, decoder_attention = decoder(
+                decoder_input, decoder_hidden, encoder_outputs)
+            decoder_attentions[di] = decoder_attention.data
+            _, topi = decoder_output.data.topk(1)
+            if topi.item() == const.EOS_idx:
+                decoded_words.append('<EOS>')
+                break
+            else:
+                decoded_words.append(output_lang.index2word[topi.item()])
+
+            decoder_input = topi.squeeze().detach()
+
+        return decoded_words, decoder_attentions[:di + 1]
 
 
 def decode(args):
     """Decode the input."""
     logger.info('Decoding input sequence: {}'.format(args.sequence))
+    dataset_param_filepath = os.path.join(args.model, 'dataset.params')
+    dataset_params = putils.load_params(dataset_param_filepath)
+    source_vocab_filepath = os.path.join(args.model, 'source.vocab')
+    source_vocab = putils.load_vocab(source_vocab_filepath)
+    target_vocab_filepath = os.path.join(args.model, 'target.vocab')
+    target_vocab = putils.load_vocab(target_vocab_filepath)
     checkpoint_filepath = os.path.join(args.model, 'checkpoint.model')
     checkpoint = torch.load(checkpoint_filepath)
     encoder = Encoder(model_type=checkpoint['encoder']['model_type'],
@@ -195,7 +231,9 @@ def decode(args):
                       bidirectional=checkpoint['decoder']['bidirectional'])
     decoder.load_state_dict(checkpoint['decoder_state_dict'])
     decoder.eval()
-    # return _decode(args.sequence, encoder, decoder)
+    return _decode(args.sequence, encoder, decoder, source_vocab, target_vocab,
+                   dataset_params['is_character_based'],
+                   dataset_params['max_seq_len'])
 
 
 def evaluate(args):

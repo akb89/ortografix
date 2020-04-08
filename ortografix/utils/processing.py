@@ -1,4 +1,4 @@
-"""Preprocess data for training the seq2seq model."""
+"""Process data and params for training/decoding."""
 import sys
 import logging
 
@@ -6,7 +6,25 @@ import ortografix.utils.constants as const
 
 logger = logging.getLogger(__name__)
 
-__all__ = ('index_dataset', 'index_sequence', 'create_vocab', 'load_vocab')
+__all__ = ('index_dataset', 'index_sequence', 'create_vocab', 'load_vocab',
+           'load_params')
+
+
+def load_params(params_filepath):
+    """Load parameter dict from file (tab separated)."""
+    params = {}
+    with open(params_filepath, 'r', encoding='utf-8') as params_str:
+        for line in params_str:
+            line = line.strip()
+            items = line.split('\t')
+            if items[0] in ['shuffle', 'is_character_based']:
+                params[items[0]] = bool(items[1])
+            elif items[0] in ['max_seq_len']:
+                params[items[0]] = int(items[1])
+            else:
+                raise Exception('Unsupported dataset parameter: {}'
+                                .format(items[0]))
+    return params
 
 
 def load_vocab(vocab_filepath):

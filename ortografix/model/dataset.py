@@ -1,11 +1,11 @@
-"""Preprocessing utilities."""
+"""Dataset model."""
 import os
 import random
 import logging
 
 import torch
 
-import ortografix.utils.preprocessing as putils
+import ortografix.utils.processing as putils
 import ortografix.utils.constants as const
 
 __all__ = ('Dataset')
@@ -29,11 +29,6 @@ class Vocab():
                 dataset_filepath, is_character_based, is_source)
         if vocab_filepath:
             self._vocab = putils.load_vocab(vocab_filepath)
-
-    @property
-    def is_character_based(self):
-        """Return True is Vocab is character-based, False if token-based."""
-        return self._is_character_based
 
     @property
     def size(self):
@@ -78,6 +73,11 @@ class Dataset():
             self._max_seq_len)
 
     @property
+    def is_character_based(self):
+        """Return True if character-based, False if token-based."""
+        return self._is_character_based
+
+    @property
     def shuffle(self):
         """Return True if dataset sentence pairs will be shuffled."""
         return self._shuffle
@@ -120,6 +120,8 @@ class Dataset():
         params_filepath = os.path.join(output_dirpath, 'dataset.params')
         with open(params_filepath, 'w', encoding='utf-8') as output_str:
             print('shuffle\t{}'.format(self._shuffle), file=output_str)
+            print('is_character_based\t{}'.format(self._is_character_based),
+                  file=output_str)
             print('max_seq_len\t{}'.format(self._max_seq_len), file=output_str)
         logger.info('Saving source vocab...')
         source_vocab_filepath = os.path.join(output_dirpath, 'source.vocab')
