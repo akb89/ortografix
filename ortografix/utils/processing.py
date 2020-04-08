@@ -18,7 +18,7 @@ def load_params(params_filepath):
             line = line.strip()
             items = line.split('\t')
             if items[0] in ['shuffle', 'is_character_based']:
-                params[items[0]] = bool(items[1])
+                params[items[0]] = items[1] == 'True'
             elif items[0] in ['max_seq_len']:
                 params[items[0]] = int(items[1])
             else:
@@ -41,7 +41,7 @@ def load_vocab(vocab_filepath):
 
 def _create_vocab(input_str, is_character_based, is_source):
     logger.info('Preparing source and target dictionaries...')
-    vocab = {const.SOS: const.SOS_idx, const.EOS: const.EOS_idx}
+    vocab = {const.SOS: const.SOS_IDX, const.EOS: const.EOS_IDX}
     ref_idx = 0 if is_source is True else 1
     for line in input_str:
         line = line.strip()

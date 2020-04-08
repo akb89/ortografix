@@ -2,11 +2,11 @@
 
 import torch
 
-__all__ = ('EOS', 'SOS', 'SEP', 'DEVICE', 'SOS_idx', 'EOS_idx')
+__all__ = ('EOS', 'SOS', 'SEP', 'DEVICE', 'SOS_IDX', 'EOS_IDX')
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 EOS = '__EOS__'
 SOS = '__SOS__'
 SEP = '__SEP__'
-SOS_idx = 0
-EOS_idx = 1
+SOS_IDX = 0
+EOS_IDX = 1

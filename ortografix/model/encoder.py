@@ -1,5 +1,4 @@
 """Encoder."""
-import os
 import logging
 
 import torch

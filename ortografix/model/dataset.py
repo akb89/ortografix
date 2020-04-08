@@ -3,12 +3,9 @@ import os
 import random
 import logging
 
-import torch
-
 import ortografix.utils.processing as putils
-import ortografix.utils.constants as const
 
-__all__ = ('Dataset')
+__all__ = ('Dataset', 'Vocab')
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +40,7 @@ class Vocab():
     @property
     def idx2item(self):
         """Return idx-to-token/character mapping (dict)."""
-        return {idx: item for item, idx in self._vocab}
+        return {idx: item for item, idx in self._vocab.items()}
 
 
 class Dataset():
@@ -100,19 +97,9 @@ class Dataset():
     @property
     def indexes(self):
         """Return a list of source/target indexed sequences."""
-        return self._indexes
-
-    @property
-    def input_tensors(self):
-        """Return iterator over source/target pairs of tensors."""
-        if self.shuffle:
+        if self._shuffle:
             random.shuffle(self._indexes)
-        for source_indexes, target_indexes in self._indexes:
-            source_tensor = torch.tensor(source_indexes, dtype=torch.long,
-                                         device=const.DEVICE).view(-1, 1)
-            target_tensor = torch.tensor(target_indexes, dtype=torch.long,
-                                         device=const.DEVICE).view(-1, 1)
-            yield source_tensor, target_tensor
+        return self._indexes
 
     def save_params(self, output_dirpath):
         """Save vocabularies and dataset parameters."""

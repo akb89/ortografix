@@ -1,5 +1,4 @@
 """Simple Decoder without Attention."""
-import os
 import logging
 
 import torch
