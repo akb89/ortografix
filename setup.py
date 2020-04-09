@@ -23,7 +23,7 @@ setup(
     keywords=['seq2seq', 'ortographic simplification'],
     platforms=['any'],
     packages=['ortografix', 'ortografix.logging', 'ortografix.exceptions',
-              'ortografix.utils'],
+              'ortografix.utils', 'ortografix.model'],
     package_data={'ortografix': ['logging/*.yml', 'resources/*']},
     include_package_data=True,
     entry_points={
