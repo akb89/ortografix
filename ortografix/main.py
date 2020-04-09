@@ -163,6 +163,10 @@ def _train(encoder, decoder, dataset, with_attention, num_epochs,
 def train(args):
     """Train the model."""
     logger.info('Training model from {}'.format(args.data))
+    if not os.path.exists(args.output_dirpath):
+        logger.info('Creating output directory to save files to: {}'
+                    .format(args.output_dirpath))
+        os.makedirs(args.output_dirpath, exist_ok=True)
     dataset = Dataset(args.data, args.character_based, args.shuffle,
                       args.max_seq_len)
     encoder = Encoder(model_type=args.model_type,
