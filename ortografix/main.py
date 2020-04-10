@@ -62,7 +62,8 @@ def save_dataset_and_models(output_dirpath, dataset, encoder, decoder, loss,
                 },
                 'with_attention': with_attention,
                 'loss': loss,
-                'learning_rate': learning_rate},
+                'learning_rate': learning_rate,
+                'cuda': torch.cuda.is_available()},
                os.path.join(output_dirpath, 'checkpoint.model'))
 
 
@@ -167,6 +168,10 @@ def train(args):
         logger.info('Creating output directory to save files to: {}'
                     .format(args.output_dirpath))
         os.makedirs(args.output_dirpath, exist_ok=True)
+    if torch.cuda.is_available():
+        logger.info('Training on GPU')
+    else:
+        logger.info('No GPU available. Training on CPU')
     dataset = Dataset(args.data, args.character_based, args.shuffle,
                       args.max_seq_len)
     encoder = Encoder(model_type=args.model_type,
@@ -244,6 +249,18 @@ def evaluate(args):
     target_vocab = Vocab(vocab_filepath=target_vocab_filepath)
     checkpoint_filepath = os.path.join(args.model, 'checkpoint.model')
     checkpoint = torch.load(checkpoint_filepath)
+    if not torch.cuda.is_available() and checkpoint['cuda']:
+        logger.info('Loading a GPU-trained model on CPU')
+        checkpoint = torch.load(checkpoint_filepath,
+                                map_location=const.DEVICE)
+    elif torch.cuda.is_available() and checkpoint['cuda']:
+        logger.info('Loading a GPU-trained model on GPU')
+    elif torch.cuda.is_available() and not checkpoint['cuda']:
+        logger.info('Loading a CPU-trained model on GPU')
+        checkpoint = torch.load(checkpoint_filepath,
+                                map_location='cuda:0')
+    else:
+        logger.info('Loading a CPU-trained model on CPU')
     encoder = Encoder(model_type=checkpoint['encoder']['model_type'],
                       input_size=checkpoint['encoder']['input_size'],
                       hidden_size=checkpoint['encoder']['hidden_size'],
@@ -252,8 +269,6 @@ def evaluate(args):
                       bias=checkpoint['encoder']['bias'],
                       dropout=checkpoint['encoder']['dropout'],
                       bidirectional=checkpoint['encoder']['bidirectional'])
-    encoder.load_state_dict(checkpoint['encoder_state_dict'])
-    encoder.eval()
     if checkpoint['with_attention']:
         decoder = Attention(model_type=checkpoint['decoder']['model_type'],
                             hidden_size=checkpoint['decoder']['hidden_size'],
@@ -273,7 +288,12 @@ def evaluate(args):
                           bias=checkpoint['decoder']['bias'],
                           dropout=checkpoint['decoder']['dropout'],
                           bidirectional=checkpoint['decoder']['bidirectional'])
+    encoder.load_state_dict(checkpoint['encoder_state_dict'])
     decoder.load_state_dict(checkpoint['decoder_state_dict'])
+    if torch.cuda.is_available():
+        encoder.to(const.DEVICE)
+        decoder.to(const.DEVICE)
+    encoder.eval()
     decoder.eval()
     indexes = putils.index_dataset(
         args.data, source_vocab.item2idx, target_vocab.item2idx,
