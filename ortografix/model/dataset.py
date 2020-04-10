@@ -14,7 +14,7 @@ class Vocab():
     """A Vocab class to process vocabularies for source/target sequences."""
 
     def __init__(self, dataset_filepath=None, vocab_filepath=None,
-                 is_character_based=False, is_source=True):
+                 is_character_based=False, is_source=True, is_reversed=False):
         if not (dataset_filepath or vocab_filepath):
             raise Exception('You must specify either dataset_filepath or '
                             'vocab_filepath to initialize the vocabulary')
@@ -23,7 +23,7 @@ class Vocab():
                             'vocab_filepath to initialize the vocabulary')
         if dataset_filepath:
             self._vocab = putils.create_vocab(
-                dataset_filepath, is_character_based, is_source)
+                dataset_filepath, is_character_based, is_source, is_reversed)
         if vocab_filepath:
             self._vocab = putils.load_vocab(vocab_filepath)
 
@@ -47,7 +47,7 @@ class Dataset():
     """A dataset class to return source/target tensors from training data."""
 
     def __init__(self, data_filepath, is_character_based, shuffle,
-                 max_seq_len):
+                 max_seq_len, is_reversed):
         """Prepare input tensors.
 
         Prepare dictionaries for source and target items.
@@ -58,16 +58,17 @@ class Dataset():
         self._is_character_based = is_character_based
         self._shuffle = shuffle
         self._max_seq_len = max_seq_len
+        self._is_reversed = is_reversed
         self._source_vocab = Vocab(dataset_filepath=data_filepath,
                                    is_character_based=is_character_based,
-                                   is_source=True)
+                                   is_source=True, is_reversed=is_reversed)
         self._target_vocab = Vocab(dataset_filepath=data_filepath,
                                    is_character_based=is_character_based,
-                                   is_source=False)
+                                   is_source=False, is_reversed=is_reversed)
         self._indexes = putils.index_dataset(
             self._data_filepath, self._source_vocab.item2idx,
             self._target_vocab.item2idx, self._is_character_based,
-            self._max_seq_len)
+            self._max_seq_len, self._is_reversed)
 
     @property
     def is_character_based(self):
@@ -110,6 +111,7 @@ class Dataset():
             print('is_character_based\t{}'.format(self._is_character_based),
                   file=output_str)
             print('max_seq_len\t{}'.format(self._max_seq_len), file=output_str)
+            print('is_reversed\t{}'.format(self._is_reversed), file=output_str)
         logger.info('Saving source vocab...')
         source_vocab_filepath = os.path.join(output_dirpath, 'source.vocab')
         with open(source_vocab_filepath, 'w', encoding='utf-8') as source_str:

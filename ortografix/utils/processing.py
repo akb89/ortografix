@@ -17,7 +17,8 @@ def load_params(params_filepath):
         for line in params_str:
             line = line.strip()
             items = line.split('\t')
-            if items[0] in ['shuffle', 'is_character_based', 'cuda']:
+            if items[0] in ['shuffle', 'is_character_based', 'cuda',
+                            'is_reversed']:
                 params[items[0]] = items[1] == 'True'
             elif items[0] in ['max_seq_len']:
                 params[items[0]] = int(items[1])
@@ -39,10 +40,10 @@ def load_vocab(vocab_filepath):
     return vocab
 
 
-def _create_vocab(input_str, is_character_based, is_source):
+def _create_vocab(input_str, is_character_based, is_source, is_reversed):
     logger.info('Preparing source and target dictionaries...')
     vocab = {const.SOS: const.SOS_IDX, const.EOS: const.EOS_IDX}
-    ref_idx = 0 if is_source is True else 1
+    ref_idx = 1 if is_source == is_reversed else 0
     for line in input_str:
         line = line.strip()
         sent = line.split('\t')[ref_idx]
@@ -62,7 +63,7 @@ def _create_vocab(input_str, is_character_based, is_source):
     return vocab
 
 
-def create_vocab(dataset_filepath, character_based, source_or_target):
+def create_vocab(dataset_filepath, character_based, is_source, is_reversed):
     """Generate token/character-to-idx mapping for a dataset file.
 
     Dataset file should contains pairs of aligned sentences,
@@ -71,7 +72,8 @@ def create_vocab(dataset_filepath, character_based, source_or_target):
     or target sequence
     """
     with open(dataset_filepath, 'r', encoding='utf-8') as input_str:
-        return _create_vocab(input_str, character_based, source_or_target)
+        return _create_vocab(input_str, character_based, is_source,
+                             is_reversed)
 
 
 def index_sequence(sequence, item2idx, is_character_based):
@@ -90,13 +92,18 @@ def index_sequence(sequence, item2idx, is_character_based):
     return indexes
 
 
-def _index_tokens(input_stream, source_item2idx, target_item2idx, max_seq_len):
+def _index_tokens(input_stream, source_item2idx, target_item2idx, max_seq_len,
+                  is_reversed):
     logger.info('Preparing token-based source-target indexes...')
     source_target_indexes = []
     for line in input_stream:
         line = line.strip()
-        source_sent = line.split('\t')[0]
-        target_sent = line.split('\t')[1]
+        if is_reversed:
+            source_sent = line.split('\t')[1]
+            target_sent = line.split('\t')[0]
+        else:
+            source_sent = line.split('\t')[0]
+            target_sent = line.split('\t')[1]
         source_tokens = source_sent.split()
         target_tokens = target_sent.split()
         if len(source_tokens) > max_seq_len \
@@ -169,7 +176,7 @@ def _is_dataset_consistent(data_filepath):
 
 
 def index_dataset(data_filepath, source_item2idx, target_item2idx,
-                  is_character_based, max_seq_len):
+                  is_character_based, max_seq_len, is_reversed):
     logger.info('Indexing dataset...')
     if is_character_based:
         if not _is_dataset_consistent(data_filepath):
@@ -177,7 +184,8 @@ def index_dataset(data_filepath, source_item2idx, target_item2idx,
             sys.exit(0)
     with open(data_filepath, 'r', encoding='utf-8') as data_str:
         if is_character_based:
-            return _index_characters(data_str, source_item2idx,
-                                     target_item2idx, max_seq_len)
+            raise Exception('Unsupported for now. Revise with is_reversed')
+            # return _index_characters(data_str, source_item2idx,
+            #                          target_item2idx, max_seq_len)
         return _index_tokens(data_str, source_item2idx, target_item2idx,
-                             max_seq_len)
+                             max_seq_len, is_reversed)

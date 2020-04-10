@@ -175,7 +175,7 @@ def train(args):
     else:
         logger.info('No GPU available. Training on CPU')
     dataset = Dataset(args.data, args.character_based, args.shuffle,
-                      args.max_seq_len)
+                      args.max_seq_len, args.reverse)
     encoder = Encoder(model_type=args.model_type,
                       input_size=dataset.source_vocab.size,
                       hidden_size=args.hidden_size,
@@ -302,7 +302,8 @@ def evaluate(args):
     decoder.eval()
     indexes = putils.index_dataset(
         args.data, source_vocab.item2idx, target_vocab.item2idx,
-        dataset_params['is_character_based'], dataset_params['max_seq_len'])
+        dataset_params['is_character_based'], dataset_params['max_seq_len'],
+        dataset_params['is_reversed'])
     if args.random > 0:
         random.shuffle(indexes)
         for seq_num in range(args.random):
@@ -371,6 +372,8 @@ def main():
                               help='absolute dirpath where to save models')
     parser_train.add_argument('-w', '--with-attention', action='store_true',
                               help='if set, will use attention-based decoding')
+    parser_train.add_argument('-v', '--reverse', action='store_true',
+                              help='if set, will reverse dataset pairs')
     parser_evaluate = subparsers.add_parser(
         'evaluate', formatter_class=argparse.RawTextHelpFormatter,
         help='evaluate model on input test set')
@@ -379,6 +382,8 @@ def main():
                                  help='absolute path to model directory')
     parser_evaluate.add_argument('-d', '--data', required=True,
                                  help='absolute path to test set')
+    parser_evaluate.add_argument('-v', '--reverse', action='store_true',
+                                 help='if set, will reverse dataset pairs')
     parser_evaluate.add_argument('-r', '--random', type=int, default=0,
                                  help='if > 0, will test on n sequences '
                                       'randomly selected from test set')
