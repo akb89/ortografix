@@ -145,7 +145,7 @@ def _train(encoder, decoder, dataset, with_attention, num_epochs,
                     with_attention, encoder_optimizer, decoder_optimizer,
                     dataset.max_seq_len, criterion, use_teacher_forcing,
                     teacher_forcing_ratio)
-                print_loss_total = loss
+                print_loss_total += loss
                 if num_iter % print_every == 0:
                     print_loss_avg = print_loss_total / print_every
                     print_loss_total = 0
