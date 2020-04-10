@@ -66,7 +66,7 @@ def save_dataset_and_models(output_dirpath, dataset, encoder, decoder, loss,
                 'with_attention': with_attention,
                 'loss': loss,
                 'learning_rate': learning_rate},
-               os.path.join(output_dirpath, 'checkpoint.model'))
+               os.path.join(output_dirpath, 'checkpoint.tar'))
 
 
 def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
