@@ -17,7 +17,7 @@ def load_params(params_filepath):
         for line in params_str:
             line = line.strip()
             items = line.split('\t')
-            if items[0] in ['shuffle', 'is_character_based']:
+            if items[0] in ['shuffle', 'is_character_based', 'cuda']:
                 params[items[0]] = items[1] == 'True'
             elif items[0] in ['max_seq_len']:
                 params[items[0]] = int(items[1])

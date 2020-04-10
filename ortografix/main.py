@@ -38,6 +38,9 @@ def save_dataset_and_models(output_dirpath, dataset, encoder, decoder, loss,
                             learning_rate, with_attention):
     logger.info('Saving dataset and models...')
     dataset.save_params(output_dirpath)
+    model_params_filepath = os.path.join(output_dirpath, 'model.params')
+    with open(model_params_filepath, 'w', encoding='utf-8') as m_params_str:
+        print('cuda\t{}'.format(torch.cuda.is_available()), file=m_params_str)
     torch.save({'encoder_state_dict': encoder.state_dict(),
                 'decoder_state_dict': decoder.state_dict(),
                 'encoder': {
@@ -62,8 +65,7 @@ def save_dataset_and_models(output_dirpath, dataset, encoder, decoder, loss,
                 },
                 'with_attention': with_attention,
                 'loss': loss,
-                'learning_rate': learning_rate,
-                'cuda': torch.cuda.is_available()},
+                'learning_rate': learning_rate},
                os.path.join(output_dirpath, 'checkpoint.model'))
 
 
@@ -247,20 +249,23 @@ def evaluate(args):
     source_vocab = Vocab(vocab_filepath=source_vocab_filepath)
     target_vocab_filepath = os.path.join(args.model, 'target.vocab')
     target_vocab = Vocab(vocab_filepath=target_vocab_filepath)
-    checkpoint_filepath = os.path.join(args.model, 'checkpoint.model')
-    checkpoint = torch.load(checkpoint_filepath)
-    if not torch.cuda.is_available() and checkpoint['cuda']:
+    model_params_filepath = os.path.join(args.model, 'model.params')
+    model_params = putils.load_params(model_params_filepath)
+    checkpoint_filepath = os.path.join(args.model, 'checkpoint.tar')
+    if not torch.cuda.is_available() and model_params['cuda']:
         logger.info('Loading a GPU-trained model on CPU')
         checkpoint = torch.load(checkpoint_filepath,
                                 map_location=const.DEVICE)
-    elif torch.cuda.is_available() and checkpoint['cuda']:
+    elif torch.cuda.is_available() and model_params['cuda']:
         logger.info('Loading a GPU-trained model on GPU')
-    elif torch.cuda.is_available() and not checkpoint['cuda']:
+        checkpoint = torch.load(checkpoint_filepath)
+    elif torch.cuda.is_available() and not model_params['cuda']:
         logger.info('Loading a CPU-trained model on GPU')
         checkpoint = torch.load(checkpoint_filepath,
                                 map_location='cuda:0')
     else:
         logger.info('Loading a CPU-trained model on CPU')
+        checkpoint = torch.load(checkpoint_filepath)
     encoder = Encoder(model_type=checkpoint['encoder']['model_type'],
                       input_size=checkpoint['encoder']['input_size'],
                       hidden_size=checkpoint['encoder']['hidden_size'],
