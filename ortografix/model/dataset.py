@@ -57,8 +57,8 @@ class Dataset():
         self._data_filepath = data_filepath
         self._is_character_based = is_character_based
         self._shuffle = shuffle
-        self._max_seq_len = max_seq_len
         self._is_reversed = is_reversed
+        self._max_seq_len = max_seq_len
         self._source_vocab = Vocab(dataset_filepath=data_filepath,
                                    is_character_based=is_character_based,
                                    is_source=True, is_reversed=is_reversed)

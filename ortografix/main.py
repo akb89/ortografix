@@ -174,8 +174,17 @@ def train(args):
         logger.info('Training on GPU')
     else:
         logger.info('No GPU available. Training on CPU')
+    if not args.max_seq_len:
+        max_seq_len = putils.get_max_seq_len(args.data, args.character_based)
+        logger.info('max_seq_len not specified in args. Automatically setting '
+                    'to longest source sequence length = {}'
+                    .format(max_seq_len))
+    else:
+        logger.info('Manually setting max_seq_len to {}'
+                    .format(args.max_seq_len))
+        max_seq_len = args.max_seq_len
     dataset = Dataset(args.data, args.character_based, args.shuffle,
-                      args.max_seq_len, args.reverse)
+                      max_seq_len, args.reverse)
     encoder = Encoder(model_type=args.model_type,
                       input_size=dataset.source_vocab.size,
                       hidden_size=args.hidden_size,
@@ -187,7 +196,7 @@ def train(args):
         decoder = Attention(model_type=args.model_type,
                             hidden_size=args.hidden_size,
                             output_size=dataset.target_vocab.size,
-                            max_seq_len=args.max_seq_len,
+                            max_seq_len=dataset.max_seq_len,
                             num_layers=args.num_layers,
                             nonlinearity=args.nonlinearity,
                             bias=args.bias, dropout=args.dropout,
@@ -339,8 +348,10 @@ def main():
                                    'neural machine translation')
     parser_train.add_argument('-s', '--shuffle', action='store_true',
                               help='if set, will shuffle the training data')
-    parser_train.add_argument('-m', '--max-seq-len', type=int, default=10,
-                              help='maximum sequence length to retain')
+    parser_train.add_argument('-m', '--max-seq-len', type=int, default=0,
+                              help='maximum sequence length to retain. If not '
+                                   'set manually, will be set to the length '
+                                   'of the longest sequence in the dataset')
     parser_train.add_argument('-z', '--hidden-size', type=int, default=256,
                               help='size of the hidden layer')
     parser_train.add_argument('-n', '--num-layers', type=int, default=1,

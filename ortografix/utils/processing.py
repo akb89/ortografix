@@ -7,7 +7,36 @@ import ortografix.utils.constants as const
 logger = logging.getLogger(__name__)
 
 __all__ = ('index_dataset', 'index_sequence', 'create_vocab', 'load_vocab',
-           'load_params')
+           'load_params', 'get_max_seq_len')
+
+
+def get_max_seq_len(data_filepath, is_character_based):
+    """Return max sequence length computed from dataset.
+
+    If is_character_based, will return the length of the longuest word.
+    Else, will return the length of the longuest sentence.
+    """
+    if is_character_based:
+        if not _is_dataset_consistent(data_filepath):
+            logger.error('Dataset in inconsistent state. Exiting...')
+            sys.exit(0)
+    max_seq_len = 0
+    with open(data_filepath, 'r', encoding='utf-8') as data_str:
+        for line in data_str:
+            line = line.strip()
+            tokens = line.split('\t')[0].split()
+            if is_character_based:
+                for token in tokens:
+                    max_seq_len = max(max_seq_len, len(token))
+            else:
+                max_seq_len = max(max_seq_len, len(tokens))
+            tokens = line.split('\t')[1].split()
+            if is_character_based:
+                for token in tokens:
+                    max_seq_len = max(max_seq_len, len(token))
+            else:
+                max_seq_len = max(max_seq_len, len(tokens))
+    return max_seq_len
 
 
 def load_params(params_filepath):
@@ -98,12 +127,8 @@ def _index_tokens(input_stream, source_item2idx, target_item2idx, max_seq_len,
     source_target_indexes = []
     for line in input_stream:
         line = line.strip()
-        if is_reversed:
-            source_sent = line.split('\t')[1]
-            target_sent = line.split('\t')[0]
-        else:
-            source_sent = line.split('\t')[0]
-            target_sent = line.split('\t')[1]
+        source_sent = line.split('\t')[1] if is_reversed else line.split('\t')[0]
+        target_sent = line.split('\t')[0] if is_reversed else line.split('\t')[1]
         source_tokens = source_sent.split()
         target_tokens = target_sent.split()
         if len(source_tokens) > max_seq_len \
@@ -122,13 +147,13 @@ def _index_tokens(input_stream, source_item2idx, target_item2idx, max_seq_len,
 
 
 def _index_characters(input_stream, source_item2idx, target_item2idx,
-                      max_seq_len):
+                      max_seq_len, is_reversed):
     logger.info('Preparing character-based source-target indexes...')
     source_target_indexes = []
     for line in input_stream:
         line = line.strip()
-        source_sent = line.split('\t')[0]
-        target_sent = line.split('\t')[1]
+        source_sent = line.split('\t')[1] if is_reversed else line.split('\t')[0]
+        target_sent = line.split('\t')[0] if is_reversed else line.split('\t')[1]
         source_tokens = source_sent.split()
         target_tokens = target_sent.split()
         for source_token, target_token in zip(source_tokens,
@@ -184,8 +209,7 @@ def index_dataset(data_filepath, source_item2idx, target_item2idx,
             sys.exit(0)
     with open(data_filepath, 'r', encoding='utf-8') as data_str:
         if is_character_based:
-            raise Exception('Unsupported for now. Revise with is_reversed')
-            # return _index_characters(data_str, source_item2idx,
-            #                          target_item2idx, max_seq_len)
+            return _index_characters(data_str, source_item2idx,
+                                     target_item2idx, max_seq_len, is_reversed)
         return _index_tokens(data_str, source_item2idx, target_item2idx,
                              max_seq_len, is_reversed)
