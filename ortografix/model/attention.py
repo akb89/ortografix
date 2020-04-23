@@ -6,6 +6,7 @@ import ortografix.utils.constants as const
 __all__ = ('Attention')
 
 
+# pylint: disable=R0902
 class Attention(torch.nn.Module):
     """Attention class."""
 

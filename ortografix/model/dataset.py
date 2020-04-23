@@ -15,6 +15,7 @@ class Vocab():
 
     def __init__(self, dataset_filepath=None, vocab_filepath=None,
                  is_character_based=False, is_source=True, is_reversed=False):
+        """Initialize vocabulary."""
         if not (dataset_filepath or vocab_filepath):
             raise Exception('You must specify either dataset_filepath or '
                             'vocab_filepath to initialize the vocabulary')
@@ -43,6 +44,7 @@ class Vocab():
         return {idx: item for item, idx in self._vocab.items()}
 
 
+# pylint: disable=R0902
 class Dataset():
     """A dataset class to return source/target tensors from training data."""
 

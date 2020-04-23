@@ -36,6 +36,7 @@ __all__ = ('train', 'evaluate')
 
 def save_dataset_and_models(output_dirpath, dataset, encoder, decoder, loss,
                             learning_rate, with_attention):
+    """Dump pytorch model and Dataset parameters."""
     logger.info('Saving dataset and models...')
     dataset.save_params(output_dirpath)
     model_params_filepath = os.path.join(output_dirpath, 'model.params')
@@ -69,6 +70,7 @@ def save_dataset_and_models(output_dirpath, dataset, encoder, decoder, loss,
                os.path.join(output_dirpath, 'checkpoint.tar'))
 
 
+# pylint: disable=R0914,E1102
 def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
                         with_attention, encoder_optimizer, decoder_optimizer,
                         max_seq_len, criterion, use_teacher_forcing,
@@ -82,29 +84,29 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
     encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size,
                                   device=const.DEVICE)
     loss = 0
-    for ei in range(input_length):
-        encoder_output, encoder_hidden = encoder(source_tensor[ei],
+    for encoder_input in range(input_length):
+        encoder_output, encoder_hidden = encoder(source_tensor[encoder_input],
                                                  encoder_hidden)
-        encoder_outputs[ei] = encoder_output[0, 0]
+        encoder_outputs[encoder_input] = encoder_output[0, 0]
     decoder_input = torch.tensor([[const.SOS_IDX]], device=const.DEVICE)
     decoder_hidden = encoder_hidden
-    use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
+    use_teacher_forcing = random.random() < teacher_forcing_ratio
     if use_teacher_forcing:
         # Teacher forcing: Feed the target as the next input
-        for di in range(target_length):
+        for decoder_input in range(target_length):
             if with_attention:
-                decoder_output, decoder_hidden, decoder_attention = decoder(
+                decoder_output, decoder_hidden, _ = decoder(
                     decoder_input, decoder_hidden, encoder_outputs)
             else:
                 decoder_output, decoder_hidden = decoder(
                     decoder_input, decoder_hidden)
-            loss += criterion(decoder_output, target_tensor[di])
-            decoder_input = target_tensor[di]  # Teacher forcing
+            loss += criterion(decoder_output, target_tensor[decoder_input])
+            decoder_input = target_tensor[decoder_input]  # Teacher forcing
     else:
         # Without teacher forcing: use its own predictions as the next input
-        for di in range(target_length):
+        for decoder_input in range(target_length):
             if with_attention:
-                decoder_output, decoder_hidden, decoder_attention = decoder(
+                decoder_output, decoder_hidden, _ = decoder(
                     decoder_input, decoder_hidden, encoder_outputs)
             else:
                 decoder_output, decoder_hidden = decoder(
@@ -112,7 +114,7 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
             _, topi = decoder_output.topk(1)
             # detach from history as input
             decoder_input = topi.squeeze().detach()
-            loss += criterion(decoder_output, target_tensor[di])
+            loss += criterion(decoder_output, target_tensor[decoder_input])
             if decoder_input.item() == const.EOS_IDX:
                 break
     loss.backward()
@@ -151,10 +153,10 @@ def _train(encoder, decoder, dataset, with_attention, num_epochs,
                     print_loss_total = 0
                     time_info = tutils.time_since(start,
                                                   num_iter / num_total_iters)
-                    logger.info('Epoch {}/{} {} ({} {}%) {}'
-                                .format(epoch, num_epochs, time_info, num_iter,
-                                        round(num_iter / num_total_iters * 100),
-                                        round(print_loss_avg, 4)))
+                    logger.info('Epoch {}/{} {} ({} {}%) {}'.format(
+                        epoch, num_epochs, time_info, num_iter,
+                        round(num_iter / num_total_iters * 100),
+                        round(print_loss_avg, 4)))
         save_dataset_and_models(output_dirpath, dataset, encoder, decoder,
                                 loss, learning_rate, with_attention)
     except KeyboardInterrupt:
@@ -224,20 +226,20 @@ def _decode(source_indexes, encoder, decoder, with_attention, max_seq_len):
         # add 2 to max_seq_len to include SOS and EOS
         encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size,
                                       device=const.DEVICE)
-        for ei in range(input_length):
-            encoder_output, encoder_hidden = encoder(input_tensor[ei],
-                                                     encoder_hidden)
-            encoder_outputs[ei] += encoder_output[0, 0]
+        for encoder_input in range(input_length):
+            encoder_output, encoder_hidden = encoder(
+                input_tensor[encoder_input], encoder_hidden)
+            encoder_outputs[encoder_input] += encoder_output[0, 0]
         decoder_input = torch.tensor([[const.SOS_IDX]], device=const.DEVICE)
         decoder_hidden = encoder_hidden
         decoded_indexes = []
         # add 2 to max_seq_len to include SOS and EOS
         decoder_attentions = torch.zeros(max_seq_len+2, max_seq_len+2)
-        for di in range(max_seq_len+2):
+        for decoder_input in range(max_seq_len+2):
             if with_attention:
                 decoder_output, decoder_hidden, decoder_attention = decoder(
                     decoder_input, decoder_hidden, encoder_outputs)
-                decoder_attentions[di] = decoder_attention.data
+                decoder_attentions[decoder_input] = decoder_attention.data
             else:
                 decoder_output, decoder_hidden = decoder(decoder_input,
                                                          decoder_hidden)
@@ -247,7 +249,7 @@ def _decode(source_indexes, encoder, decoder, with_attention, max_seq_len):
                 break
             decoded_indexes.append(topi.item())
             decoder_input = topi.squeeze().detach()
-        return decoded_indexes, decoder_attentions[:di + 1]
+        return decoded_indexes, decoder_attentions[:decoder_input + 1]
 
 
 def evaluate(args):
@@ -318,13 +320,16 @@ def evaluate(args):
         for seq_num in range(args.random):
             seq = indexes[seq_num]
             print('-'*80)
-            print('>', ' '.join([source_vocab.idx2item[idx] for idx in seq[0]]))
-            print('=', ' '.join([target_vocab.idx2item[idx] for idx in seq[1]]))
+            print('>', ' '.join([source_vocab.idx2item[idx]
+                                 for idx in seq[0]]))
+            print('=', ' '.join([target_vocab.idx2item[idx]
+                                 for idx in seq[1]]))
             # TODO: add support for OOV
             predicted_idx, _ = _decode(seq[0], encoder, decoder,
                                        checkpoint['with_attention'],
                                        dataset_params['max_seq_len'])
-            print('<', ' '.join([target_vocab.idx2item[idx] for idx in predicted_idx]))
+            print('<', ' '.join([target_vocab.idx2item[idx]
+                                 for idx in predicted_idx]))
 
 
 def main():

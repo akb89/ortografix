@@ -114,9 +114,8 @@ def index_sequence(sequence, item2idx, is_character_based):
     sequence = sequence.strip()
     for item in sequence.split():
         if is_character_based:
-            raise Exception('Unsupported for now')
-        else:
-            indexes.append(item2idx[item])
+            raise Exception('Unsupported is_character_based option for now')
+        indexes.append(item2idx[item])
     indexes.append(const.EOS)
     return indexes
 
@@ -127,8 +126,10 @@ def _index_tokens(input_stream, source_item2idx, target_item2idx, max_seq_len,
     source_target_indexes = []
     for line in input_stream:
         line = line.strip()
-        source_sent = line.split('\t')[1] if is_reversed else line.split('\t')[0]
-        target_sent = line.split('\t')[0] if is_reversed else line.split('\t')[1]
+        source_sent = line.split('\t')[1] if is_reversed \
+         else line.split('\t')[0]
+        target_sent = line.split('\t')[0] if is_reversed \
+         else line.split('\t')[1]
         source_tokens = source_sent.split()
         target_tokens = target_sent.split()
         if len(source_tokens) > max_seq_len \
@@ -146,21 +147,25 @@ def _index_tokens(input_stream, source_item2idx, target_item2idx, max_seq_len,
     return source_target_indexes
 
 
+# pylint: disable=R0914
 def _index_characters(input_stream, source_item2idx, target_item2idx,
                       max_seq_len, is_reversed):
     logger.info('Preparing character-based source-target indexes...')
     source_target_indexes = []
     for line in input_stream:
         line = line.strip()
-        source_sent = line.split('\t')[1] if is_reversed else line.split('\t')[0]
-        target_sent = line.split('\t')[0] if is_reversed else line.split('\t')[1]
+        source_sent = line.split('\t')[1] if is_reversed \
+         else line.split('\t')[0]
+        target_sent = line.split('\t')[0] if is_reversed \
+         else line.split('\t')[1]
         source_tokens = source_sent.split()
         target_tokens = target_sent.split()
         for source_token, target_token in zip(source_tokens,
                                               target_tokens):
             source_indexes = []
             target_indexes = []
-            if len(source_token) > max_seq_len or len(target_token) > max_seq_len:
+            if len(source_token) > max_seq_len \
+             or len(target_token) > max_seq_len:
                 # careful! This can remove words in the middle of a sentence
                 continue
             # Here, string sequence is taken to be word/token. SOS indicates
@@ -202,6 +207,7 @@ def _is_dataset_consistent(data_filepath):
 
 def index_dataset(data_filepath, source_item2idx, target_item2idx,
                   is_character_based, max_seq_len, is_reversed):
+    """Convert input data text file to list of indexed integers."""
     logger.info('Indexing dataset...')
     if is_character_based:
         if not _is_dataset_consistent(data_filepath):

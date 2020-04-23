@@ -10,6 +10,7 @@ __all__ = ('Encoder')
 logger = logging.getLogger(__name__)
 
 
+# pylint: disable=R0902
 class Encoder(torch.nn.Module):
     """Encoder class."""
 
