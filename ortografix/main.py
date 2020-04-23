@@ -84,27 +84,27 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
     encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size,
                                   device=const.DEVICE)
     loss = 0
-    for encoder_input in range(input_length):
-        encoder_output, encoder_hidden = encoder(source_tensor[encoder_input],
+    for eidx in range(input_length):
+        encoder_output, encoder_hidden = encoder(source_tensor[eidx],
                                                  encoder_hidden)
-        encoder_outputs[encoder_input] = encoder_output[0, 0]
+        encoder_outputs[eidx] = encoder_output[0, 0]
     decoder_input = torch.tensor([[const.SOS_IDX]], device=const.DEVICE)
     decoder_hidden = encoder_hidden
     use_teacher_forcing = random.random() < teacher_forcing_ratio
     if use_teacher_forcing:
         # Teacher forcing: Feed the target as the next input
-        for decoder_input in range(target_length):
+        for didx in range(target_length):
             if with_attention:
                 decoder_output, decoder_hidden, _ = decoder(
                     decoder_input, decoder_hidden, encoder_outputs)
             else:
                 decoder_output, decoder_hidden = decoder(
                     decoder_input, decoder_hidden)
-            loss += criterion(decoder_output, target_tensor[decoder_input])
-            decoder_input = target_tensor[decoder_input]  # Teacher forcing
+            loss += criterion(decoder_output, target_tensor[didx])
+            decoder_input = target_tensor[didx]  # Teacher forcing
     else:
         # Without teacher forcing: use its own predictions as the next input
-        for decoder_input in range(target_length):
+        for didx in range(target_length):
             if with_attention:
                 decoder_output, decoder_hidden, _ = decoder(
                     decoder_input, decoder_hidden, encoder_outputs)
@@ -114,7 +114,7 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
             _, topi = decoder_output.topk(1)
             # detach from history as input
             decoder_input = topi.squeeze().detach()
-            loss += criterion(decoder_output, target_tensor[decoder_input])
+            loss += criterion(decoder_output, target_tensor[didx])
             if decoder_input.item() == const.EOS_IDX:
                 break
     loss.backward()
@@ -226,20 +226,20 @@ def _decode(source_indexes, encoder, decoder, with_attention, max_seq_len):
         # add 2 to max_seq_len to include SOS and EOS
         encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size,
                                       device=const.DEVICE)
-        for encoder_input in range(input_length):
+        for eidx in range(input_length):
             encoder_output, encoder_hidden = encoder(
-                input_tensor[encoder_input], encoder_hidden)
-            encoder_outputs[encoder_input] += encoder_output[0, 0]
+                input_tensor[eidx], encoder_hidden)
+            encoder_outputs[eidx] += encoder_output[0, 0]
         decoder_input = torch.tensor([[const.SOS_IDX]], device=const.DEVICE)
         decoder_hidden = encoder_hidden
         decoded_indexes = []
         # add 2 to max_seq_len to include SOS and EOS
         decoder_attentions = torch.zeros(max_seq_len+2, max_seq_len+2)
-        for decoder_input in range(max_seq_len+2):
+        for didx in range(max_seq_len+2):
             if with_attention:
                 decoder_output, decoder_hidden, decoder_attention = decoder(
                     decoder_input, decoder_hidden, encoder_outputs)
-                decoder_attentions[decoder_input] = decoder_attention.data
+                decoder_attentions[didx] = decoder_attention.data
             else:
                 decoder_output, decoder_hidden = decoder(decoder_input,
                                                          decoder_hidden)
@@ -249,7 +249,7 @@ def _decode(source_indexes, encoder, decoder, with_attention, max_seq_len):
                 break
             decoded_indexes.append(topi.item())
             decoder_input = topi.squeeze().detach()
-        return decoded_indexes, decoder_attentions[:decoder_input + 1]
+        return decoded_indexes, decoder_attentions[:didx + 1]
 
 
 def evaluate(args):
