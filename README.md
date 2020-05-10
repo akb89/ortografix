@@ -48,10 +48,25 @@ ortografix train \
 ```
 
 ## Test
-To (qualitatively) evaluate the output of training on a set of 10 randomly selected sentences, run:
+### Qualitative evaluation
+To qualitatively evaluate the output of the model on a set of 10 randomly selected sentences from a given dev/test set, run:
 ```shell
 ortografix evaluate \
---data /abs/path/to/test/data \
+--data /abs/path/to/test/data.txt \
 --model /abs/path/to/model/directory/ \
 --random 10
 ```
+### Quantitative evaluation
+To quantitatively evaluate the output of the model on a given dev/test set, run:
+```shell
+ortografix evaluate \
+--data /abs/path/to/test/data.txt \
+--model /abs/path/to/model/directory
+```
+Quantitative evaluation will return:
+1. The sum of all edit (Levenshtein) distance computed across all test pairs
+2. The average edit distance computed across all test pairs
+3. The average normalized edit distance
+4. The average normalized edit similarity
+
+All measure are computed via [textdistance](https://github.com/life4/textdistance).

@@ -7,9 +7,11 @@ import os
 import argparse
 import random
 import time
+import statistics
 import logging
 import logging.config
 
+import textdistance
 import torch
 from torch import optim
 
@@ -252,6 +254,38 @@ def _decode(source_indexes, encoder, decoder, with_attention, max_seq_len):
         return decoded_indexes, decoder_attentions[:didx + 1]
 
 
+def _evaluate(indexes, encoder, decoder, target_vocab, checkpoint,
+              dataset_params):
+    avg_dist = []
+    avg_norm_dist = []
+    avg_norm_sim = []
+    for seq in indexes:
+        pred_idx, _ = _decode(seq[0], encoder, decoder,
+                              checkpoint['with_attention'],
+                              dataset_params['max_seq_len'])
+        gold = ''.join(
+            [target_vocab.idx2item[idx] for idx in seq[1] if idx not in
+             [const.SOS_IDX, const.EOS_IDX]])
+        prediction = ''.join(
+            [target_vocab.idx2item[idx] for idx in pred_idx if idx not in
+             [const.SOS_IDX, const.EOS_IDX]])
+        avg_dist.append(textdistance.levenshtein.distance(gold,
+                                                          prediction))
+        avg_norm_dist.append(textdistance.levenshtein.normalized_distance(
+            gold, prediction))
+        avg_norm_sim.append(textdistance.levenshtein.normalized_similarity(
+            gold, prediction))
+    logger.info('Printing Levenshtein edit distance info:')
+    logger.info('   total sum dist = {}'.format(sum(avg_dist)))
+    logger.info('   avg dist = {}'.format(statistics.mean(avg_dist)))
+    # logger.info('   avg sim = {}'.format(statistics.mean(avg_sim)))
+    logger.info('   avg normalized dist = {}'
+                .format(statistics.mean(avg_norm_dist)))
+    logger.info('   avg normalized sim = {}'
+                .format(statistics.mean(avg_norm_sim)))
+    return avg_dist, avg_norm_dist, avg_norm_sim
+
+
 def evaluate(args):
     """Evaluate a given model on a test set."""
     dataset_param_filepath = os.path.join(args.model, 'dataset.params')
@@ -330,6 +364,9 @@ def evaluate(args):
                                        dataset_params['max_seq_len'])
             print('<', ' '.join([target_vocab.idx2item[idx]
                                  for idx in predicted_idx]))
+    else:
+        _evaluate(indexes, encoder, decoder, target_vocab, checkpoint,
+                  dataset_params)
 
 
 def main():
