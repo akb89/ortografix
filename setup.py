@@ -16,7 +16,7 @@ setup(
     author_email='akb@3azouz.net',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    version='0.3.0',
+    version='0.3.1',
     url='https://github.com/akb89/ortografix',
     download_url='https://github.com/akb89/ortografix',
     license='MIT',
