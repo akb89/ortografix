@@ -46,7 +46,10 @@ class Decoder(torch.nn.Module):
                 input_size=hidden_size, hidden_size=hidden_size,
                 num_layers=num_layers, bias=bias, batch_first=False,
                 dropout=dropout, bidirectional=bidirectional)
-        self.out = torch.nn.Linear(hidden_size, output_size)
+        if bidirectional:
+            self.out = torch.nn.Linear(hidden_size*2, output_size)
+        else:
+            self.out = torch.nn.Linear(hidden_size, output_size)
         self.softmax = torch.nn.LogSoftmax(dim=1)
 
     # pylint: disable=R1710, W0221
@@ -68,4 +71,8 @@ class Decoder(torch.nn.Module):
 
     def init_hidden(self):
         """Initialize hidden layers."""
-        return torch.zeros(1, 1, self.hidden_size, device=const.DEVICE)
+        if self.bidirectional:
+            return torch.zeros(self.num_layers*2, 1, self.hidden_size,
+                               device=const.DEVICE)
+        return torch.zeros(self.num_layers, 1, self.hidden_size,
+                           device=const.DEVICE)

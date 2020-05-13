@@ -83,8 +83,14 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
     input_length = source_tensor.size(0)
     target_length = target_tensor.size(0)
     # add 2 to max_seq_len to include SOS and EOS
-    encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size,
-                                  device=const.DEVICE)
+    if encoder.bidirectional:
+        encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size*2,
+                                      device=const.DEVICE)
+    else:
+        encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size,
+                                      device=const.DEVICE)
+    # encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size,
+    #                               device=const.DEVICE)
     loss = 0
     for eidx in range(input_length):
         encoder_output, encoder_hidden = encoder(source_tensor[eidx],

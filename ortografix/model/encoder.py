@@ -60,4 +60,8 @@ class Encoder(torch.nn.Module):
 
     def init_hidden(self):
         """Initialize hidden layers."""
-        return torch.zeros(1, 1, self.hidden_size, device=const.DEVICE)
+        if self.bidirectional:
+            return torch.zeros(self.num_layers*2, 1, self.hidden_size,
+                               device=const.DEVICE)
+        return torch.zeros(self.num_layers, 1, self.hidden_size,
+                           device=const.DEVICE)

@@ -26,8 +26,12 @@ class Attention(torch.nn.Module):
         self.bidirectional = bidirectional
         self.embedding = torch.nn.Embedding(self.output_size, self.hidden_size)
         self.attn = torch.nn.Linear(self.hidden_size * 2, self.max_seq_len)
-        self.attn_combine = torch.nn.Linear(self.hidden_size * 2,
-                                            self.hidden_size)
+        if self.bidirectional:
+            self.attn_combine = torch.nn.Linear(self.hidden_size * 3,
+                                                self.hidden_size)
+        else:
+            self.attn_combine = torch.nn.Linear(self.hidden_size * 2,
+                                                self.hidden_size)
         if self.model_type == 'rnn':
             self.rnn = torch.nn.RNN(
                 input_size=hidden_size, hidden_size=hidden_size,
@@ -44,7 +48,10 @@ class Attention(torch.nn.Module):
                 input_size=hidden_size, hidden_size=hidden_size,
                 num_layers=num_layers, bias=bias, batch_first=False,
                 dropout=dropout, bidirectional=bidirectional)
-        self.out = torch.nn.Linear(self.hidden_size, self.output_size)
+        if self.bidirectional:
+            self.out = torch.nn.Linear(self.hidden_size*2, self.output_size)
+        else:
+            self.out = torch.nn.Linear(self.hidden_size, self.output_size)
 
     # pylint: disable=R1710, W0221
     def forward(self, input_tensor, hidden, encoder_outputs):
@@ -68,4 +75,5 @@ class Attention(torch.nn.Module):
 
     def init_hidden(self):
         """Initialize hidden layers."""
-        return torch.zeros(1, 1, self.hidden_size, device=const.DEVICE)
+        return torch.zeros(self.num_layers, 1, self.hidden_size,
+                           device=const.DEVICE)
