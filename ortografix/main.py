@@ -89,8 +89,6 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
     else:
         encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size,
                                       device=const.DEVICE)
-    # encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size,
-    #                               device=const.DEVICE)
     loss = 0
     for eidx in range(input_length):
         encoder_output, encoder_hidden = encoder(source_tensor[eidx],
@@ -232,8 +230,12 @@ def _decode(source_indexes, encoder, decoder, with_attention, max_seq_len):
         input_length = input_tensor.size()[0]
         encoder_hidden = encoder.init_hidden()
         # add 2 to max_seq_len to include SOS and EOS
-        encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size,
-                                      device=const.DEVICE)
+        if encoder.bidirectional:
+            encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size*2,
+                                          device=const.DEVICE)
+        else:
+            encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size,
+                                          device=const.DEVICE)
         for eidx in range(input_length):
             encoder_output, encoder_hidden = encoder(
                 input_tensor[eidx], encoder_hidden)
