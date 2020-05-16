@@ -57,8 +57,12 @@ class Attention(torch.nn.Module):
     def forward(self, input_tensor, hidden, encoder_outputs):
         """Apply forward computation."""
         embedded = self.embedding(input_tensor).view(1, 1, -1)
-        attn_weights = torch.nn.functional.softmax(
-            self.attn(torch.cat((embedded[0], hidden[0]), 1)), dim=1)
+        if self.model_type == 'lstm':
+            attn_weights = torch.nn.functional.softmax(
+                self.attn(torch.cat((embedded[0], hidden[0][0]), 1)), dim=1)
+        else:
+            attn_weights = torch.nn.functional.softmax(
+                self.attn(torch.cat((embedded[0], hidden[0]), 1)), dim=1)
         attn_applied = torch.bmm(attn_weights.unsqueeze(0),
                                  encoder_outputs.unsqueeze(0))
         output = torch.cat((embedded[0], attn_applied[0]), 1)

@@ -61,7 +61,13 @@ class Encoder(torch.nn.Module):
     def init_hidden(self):
         """Initialize hidden layers."""
         if self.bidirectional:
-            return torch.zeros(self.num_layers*2, 1, self.hidden_size,
-                               device=const.DEVICE)
-        return torch.zeros(self.num_layers, 1, self.hidden_size,
+            num_layers = self.num_layers*2
+        else:
+            num_layers = self.num_layers
+        if self.model_type == 'lstm':
+            return (torch.zeros(num_layers, 1, self.hidden_size,
+                                device=const.DEVICE),
+                    torch.zeros(num_layers, 1, self.hidden_size,
+                                device=const.DEVICE))
+        return torch.zeros(num_layers, 1, self.hidden_size,
                            device=const.DEVICE)
