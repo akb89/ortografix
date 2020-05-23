@@ -19,7 +19,9 @@ class Encoder(torch.nn.Module):
                  bidirectional=False):
         """Initialize encoder model."""
         if model_type not in ['rnn', 'gru', 'lstm']:
-            raise Exception('Unsupported model type: {}'.format(model_type))
+            raise Exception(
+                'Unsupported model type: {}. Should be \'rnn\', \'gru\' or '
+                '\'lstm\''.format(model_type))
         super(Encoder, self).__init__()
         self.model_type = model_type
         self.input_size = input_size

@@ -8,5 +8,6 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 EOS = '__EOS__'
 SOS = '__SOS__'
 SEP = '__SEP__'
+UNK = '__UNK__'
 SOS_IDX = 0
 EOS_IDX = 1

@@ -13,18 +13,19 @@ logger = logging.getLogger(__name__)
 class Vocab():
     """A Vocab class to process vocabularies for source/target sequences."""
 
-    def __init__(self, dataset_filepath=None, vocab_filepath=None,
-                 is_character_based=False, is_source=True, is_reversed=False):
+    def __init__(self, pairs=None, vocab_filepath=None,
+                 is_character_based=False, is_source=True, is_reversed=False,
+                 min_count=0):
         """Initialize vocabulary."""
-        if not (dataset_filepath or vocab_filepath):
-            raise Exception('You must specify either dataset_filepath or '
+        if not (pairs or vocab_filepath):
+            raise Exception('You must specify either pairs or '
                             'vocab_filepath to initialize the vocabulary')
-        if dataset_filepath and vocab_filepath:
-            raise Exception('You cannot specify *both* dataset_filepath AND '
+        if pairs and vocab_filepath:
+            raise Exception('You cannot specify *both* pairs AND '
                             'vocab_filepath to initialize the vocabulary')
-        if dataset_filepath:
+        if pairs:
             self._vocab = putils.create_vocab(
-                dataset_filepath, is_character_based, is_source, is_reversed)
+                pairs, is_character_based, is_source, is_reversed, min_count)
         if vocab_filepath:
             self._vocab = putils.load_vocab(vocab_filepath)
 
@@ -48,27 +49,38 @@ class Vocab():
 class Dataset():
     """A dataset class to return source/target tensors from training data."""
 
-    def __init__(self, data_filepath, is_character_based, shuffle,
-                 max_seq_len, is_reversed):
+    def __init__(self, pairs, is_character_based, shuffle,
+                 max_seq_len, is_reversed, min_count):
         """Prepare input tensors.
 
         Prepare dictionaries for source and target items.
         Discretize input to indexes.
         Convert to tensors and concatenate by batch
         """
-        self._data_filepath = data_filepath
+        self._pairs = pairs
         self._is_character_based = is_character_based
         self._shuffle = shuffle
         self._is_reversed = is_reversed
-        self._max_seq_len = max_seq_len
-        self._source_vocab = Vocab(dataset_filepath=data_filepath,
+        if not max_seq_len:
+            self._max_seq_len = putils.get_max_seq_len(
+                pairs, is_character_based)
+            logger.info('max_seq_len not specified in args. Automatically setting '
+                        'to longest source sequence length = {}'
+                        .format(max_seq_len))
+        else:
+            logger.info('Manually setting max_seq_len to {}'
+                        .format(max_seq_len))
+            self._max_seq_len = max_seq_len
+        self._source_vocab = Vocab(pairs=pairs,
                                    is_character_based=is_character_based,
-                                   is_source=True, is_reversed=is_reversed)
-        self._target_vocab = Vocab(dataset_filepath=data_filepath,
+                                   is_source=True, is_reversed=is_reversed,
+                                   min_count=min_count)
+        self._target_vocab = Vocab(pairs=pairs,
                                    is_character_based=is_character_based,
-                                   is_source=False, is_reversed=is_reversed)
-        self._indexes = putils.index_dataset(
-            self._data_filepath, self._source_vocab.item2idx,
+                                   is_source=False, is_reversed=is_reversed,
+                                   min_count=min_count)
+        self._indexes = putils.index_pairs(
+            self._pairs, self._source_vocab.item2idx,
             self._target_vocab.item2idx, self._is_character_based,
             self._max_seq_len, self._is_reversed)
 
@@ -86,6 +98,11 @@ class Dataset():
     def max_seq_len(self):
         """Return the maximal sequence length to be considered."""
         return self._max_seq_len
+
+    @property
+    def is_reversed(self):
+        """Return whether or not second item should be considered source."""
+        return self._is_reversed
 
     @property
     def source_vocab(self):

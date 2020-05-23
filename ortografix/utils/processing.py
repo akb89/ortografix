@@ -2,40 +2,36 @@
 import sys
 import logging
 
+from collections import defaultdict
+
 import ortografix.utils.constants as const
 
 logger = logging.getLogger(__name__)
 
-__all__ = ('index_dataset', 'index_sequence', 'create_vocab', 'load_vocab',
+__all__ = ('index_pairs', 'index_sequence', 'create_vocab', 'load_vocab',
            'load_params', 'get_max_seq_len')
 
 
-def get_max_seq_len(data_filepath, is_character_based):
-    """Return max sequence length computed from dataset.
+def get_max_seq_len(pairs, is_character_based):
+    """Return max sequence length computed from word or sentencep pairs.
 
     If is_character_based, will return the length of the longuest word.
     Else, will return the length of the longuest sentence.
     """
-    if is_character_based:
-        if not _is_dataset_consistent(data_filepath):
-            logger.error('Dataset in inconsistent state. Exiting...')
-            sys.exit(0)
     max_seq_len = 0
-    with open(data_filepath, 'r', encoding='utf-8') as data_str:
-        for line in data_str:
-            line = line.strip()
-            tokens = line.split('\t')[0].split()
-            if is_character_based:
-                for token in tokens:
-                    max_seq_len = max(max_seq_len, len(token))
-            else:
-                max_seq_len = max(max_seq_len, len(tokens))
-            tokens = line.split('\t')[1].split()
-            if is_character_based:
-                for token in tokens:
-                    max_seq_len = max(max_seq_len, len(token))
-            else:
-                max_seq_len = max(max_seq_len, len(tokens))
+    for pair in pairs:
+        tokens = pair[0].split()
+        if is_character_based:
+            for token in tokens:
+                max_seq_len = max(max_seq_len, len(token))
+        else:
+            max_seq_len = max(max_seq_len, len(tokens))
+        tokens = pair[1].split()
+        if is_character_based:
+            for token in tokens:
+                max_seq_len = max(max_seq_len, len(token))
+        else:
+            max_seq_len = max(max_seq_len, len(tokens))
     return max_seq_len
 
 
@@ -69,40 +65,50 @@ def load_vocab(vocab_filepath):
     return vocab
 
 
-def _create_vocab(input_str, is_character_based, is_source, is_reversed):
-    logger.info('Preparing source and target dictionaries...')
-    vocab = {const.SOS: const.SOS_IDX, const.EOS: const.EOS_IDX}
+def _count_items(pairs, is_character_based, is_source, is_reversed):
+    counts = defaultdict(int)
     ref_idx = 1 if is_source == is_reversed else 0
-    for line in input_str:
-        line = line.strip()
-        sent = line.split('\t')[ref_idx]
+    for pair in pairs:
+        sent = pair[ref_idx]
         for token in sent.split():
             if is_character_based is True:
                 for char in token:
-                    if char not in vocab:
+                    counts[char] += 1
+            elif is_character_based is False:
+                counts[token] += 1
+            else:
+                raise Exception('Unsupported value {} for is_character_based '
+                                'parameter'.format(is_character_based))
+    return counts
+
+
+def create_vocab(pairs, is_character_based, is_source, is_reversed, min_count):
+    """Generate token/character-to-idx mapping for word or sent pairs.
+
+    source_or_target should specify whether vocab should be created for source
+    or target sequence
+    """
+    logger.info('Preparing source and target dictionaries...')
+    vocab = {const.SOS: const.SOS_IDX, const.EOS: const.EOS_IDX}
+    ref_idx = 1 if is_source == is_reversed else 0
+    counts = _count_items(pairs, is_character_based, is_source, is_reversed)
+    for pair in pairs:
+        sent = pair[ref_idx]
+        for token in sent.split():
+            if is_character_based is True:
+                for char in token:
+                    if char not in vocab and counts[char] >= min_count:
                         vocab[char] = len(vocab)
             elif is_character_based is False:
-                if token not in vocab:
+                if token not in vocab and counts[token] >= min_count:
                     vocab[token] = len(vocab)
             else:
                 raise Exception('Unsupported value {} for is_character_based '
                                 'parameter'.format(is_character_based))
+    vocab[const.UNK] = len(vocab)
     desc = 'Source' if is_source else 'Target'
     logger.info('{} vocabulary contains {} items'.format(desc, len(vocab)))
     return vocab
-
-
-def create_vocab(dataset_filepath, character_based, is_source, is_reversed):
-    """Generate token/character-to-idx mapping for a dataset file.
-
-    Dataset file should contains pairs of aligned sentences,
-    even in character-based mode.
-    source_or_target should specify whether vocab should be created for source
-    or target sequence
-    """
-    with open(dataset_filepath, 'r', encoding='utf-8') as input_str:
-        return _create_vocab(input_str, character_based, is_source,
-                             is_reversed)
 
 
 def index_sequence(sequence, item2idx, is_character_based):
@@ -120,16 +126,13 @@ def index_sequence(sequence, item2idx, is_character_based):
     return indexes
 
 
-def _index_tokens(input_stream, source_item2idx, target_item2idx, max_seq_len,
+def _index_tokens(pairs, source_item2idx, target_item2idx, max_seq_len,
                   is_reversed):
     logger.info('Preparing token-based source-target indexes...')
     source_target_indexes = []
-    for line in input_stream:
-        line = line.strip()
-        source_sent = line.split('\t')[1] if is_reversed \
-         else line.split('\t')[0]
-        target_sent = line.split('\t')[0] if is_reversed \
-         else line.split('\t')[1]
+    for pair in pairs:
+        source_sent = pair[1] if is_reversed else pair[0]
+        target_sent = pair[0] if is_reversed else pair[1]
         source_tokens = source_sent.split()
         target_tokens = target_sent.split()
         if len(source_tokens) > max_seq_len \
@@ -148,16 +151,13 @@ def _index_tokens(input_stream, source_item2idx, target_item2idx, max_seq_len,
 
 
 # pylint: disable=R0914
-def _index_characters(input_stream, source_item2idx, target_item2idx,
+def _index_characters(pairs, source_item2idx, target_item2idx,
                       max_seq_len, is_reversed):
     logger.info('Preparing character-based source-target indexes...')
     source_target_indexes = []
-    for line in input_stream:
-        line = line.strip()
-        source_sent = line.split('\t')[1] if is_reversed \
-         else line.split('\t')[0]
-        target_sent = line.split('\t')[0] if is_reversed \
-         else line.split('\t')[1]
+    for pair in pairs:
+        source_sent = pair[1] if is_reversed else pair[0]
+        target_sent = pair[0] if is_reversed else pair[1]
         source_tokens = source_sent.split()
         target_tokens = target_sent.split()
         for source_token, target_token in zip(source_tokens,
@@ -173,9 +173,15 @@ def _index_characters(input_stream, source_item2idx, target_item2idx,
             source_indexes.append(source_item2idx[const.SOS])
             target_indexes.append(target_item2idx[const.SOS])
             for source_char in source_token:
-                source_indexes.append(source_item2idx[source_char])
+                if source_char not in source_item2idx:
+                    source_indexes.append(source_item2idx[const.UNK])
+                else:
+                    source_indexes.append(source_item2idx[source_char])
             for target_char in target_token:
-                target_indexes.append(target_item2idx[target_char])
+                if target_char not in target_item2idx:
+                    target_indexes.append(target_item2idx[const.UNK])
+                else:
+                    target_indexes.append(target_item2idx[target_char])
             source_indexes.append(source_item2idx[const.EOS])
             target_indexes.append(target_item2idx[const.EOS])
             source_target_indexes.append((source_indexes, target_indexes))
@@ -205,17 +211,16 @@ def _is_dataset_consistent(data_filepath):
     return is_consistent
 
 
-def index_dataset(data_filepath, source_item2idx, target_item2idx,
-                  is_character_based, max_seq_len, is_reversed):
+def index_pairs(pairs, source_item2idx, target_item2idx,
+                is_character_based, max_seq_len, is_reversed):
     """Convert input data text file to list of indexed integers."""
-    logger.info('Indexing dataset...')
+    logger.info('Indexing pairs...')
+    # if is_character_based:
+    #     if not _is_dataset_consistent(data_filepath):
+    #         logger.error('Dataset in inconsistent state. Exiting...')
+    #         sys.exit(0)
     if is_character_based:
-        if not _is_dataset_consistent(data_filepath):
-            logger.error('Dataset in inconsistent state. Exiting...')
-            sys.exit(0)
-    with open(data_filepath, 'r', encoding='utf-8') as data_str:
-        if is_character_based:
-            return _index_characters(data_str, source_item2idx,
-                                     target_item2idx, max_seq_len, is_reversed)
-        return _index_tokens(data_str, source_item2idx, target_item2idx,
-                             max_seq_len, is_reversed)
+        return _index_characters(pairs, source_item2idx,
+                                 target_item2idx, max_seq_len, is_reversed)
+    return _index_tokens(pairs, source_item2idx, target_item2idx,
+                         max_seq_len, is_reversed)
