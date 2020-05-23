@@ -14,6 +14,9 @@ loggers:
   ortografix.main:
     level: INFO
     handlers: [console]
+  ortografix.model:
+    level: INFO
+    handlers: [console]
   ortografix.utils:
     level: INFO
     handlers: [console]

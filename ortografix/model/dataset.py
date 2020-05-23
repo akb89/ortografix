@@ -66,7 +66,7 @@ class Dataset():
                 pairs, is_character_based)
             logger.info('max_seq_len not specified in args. Automatically setting '
                         'to longest source sequence length = {}'
-                        .format(max_seq_len))
+                        .format(self._max_seq_len))
         else:
             logger.info('Manually setting max_seq_len to {}'
                         .format(max_seq_len))

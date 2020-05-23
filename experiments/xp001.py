@@ -8,7 +8,8 @@ from ortografix import Attention, Encoder, Dataset, Decoder
 
 if __name__ == '__main__':
     NUM_XP = 10
-    DATA_FILEPATH = '/Users/akb/Github/ortografix/data/soundspel/experts.all.as.wordpairs.txt'
+    DATA_FILEPATH = '/home/kabbach/ortografix/data/experts.all.as.wordpairs.txt'
+    # DATA_FILEPATH = '/Users/akb/Github/ortografix/data/soundspel/experts.all.as.wordpairs.txt'
     # OUTPUT_DIRPATH = '/Users/akb/Github/ortografix/models/xp001/'
     CHARACTER_BASED = True
     SHUFFLE = True
@@ -22,7 +23,7 @@ if __name__ == '__main__':
     DROPOUT = 0
     BIDIRECTIONAL = True
     LEARNING_RATE = 0.01
-    EPOCHS = 8
+    EPOCHS = 10
     USE_TEACHER_FORCING = True
     TEACHER_FORCING_RATIO = 0.5
     WITH_ATTENTION = True
