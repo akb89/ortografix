@@ -83,19 +83,18 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
     decoder_optimizer.zero_grad()
     input_length = source_tensor.size(0)
     target_length = target_tensor.size(0)
-    # add 2 to max_seq_len to include SOS and EOS
     if encoder.bidirectional:
-        encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size*2,
+        encoder_outputs = torch.zeros(max_seq_len, encoder.hidden_size*2,
                                       device=const.DEVICE)
     else:
-        encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size,
+        encoder_outputs = torch.zeros(max_seq_len, encoder.hidden_size,
                                       device=const.DEVICE)
     loss = 0
     for eidx in range(input_length):
         encoder_output, encoder_hidden = encoder(source_tensor[eidx],
                                                  encoder_hidden)
         encoder_outputs[eidx] = encoder_output[0, 0]
-    decoder_input = torch.tensor([[const.SOS_IDX]], device=const.DEVICE)
+    decoder_input = torch.tensor([[]], device=const.DEVICE)
     decoder_hidden = encoder_hidden
     use_teacher_forcing = random.random() < teacher_forcing_ratio
     if use_teacher_forcing:
@@ -130,26 +129,34 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
     return loss.item() / target_length
 
 
-def _train(encoder, decoder, indexes, max_seq_len, with_attention, num_epochs,
-           learning_rate, print_every, use_teacher_forcing,
-           teacher_forcing_ratio, output_dirpath=None):
-    if not output_dirpath:
-        logger.warning('You haven\'t specified --output-dirpath. Models will '
-                       'not be saved!')
+def _train(encoder, decoder, indexed_pairs, max_seq_len, with_attention,
+           num_epochs, learning_rate, print_every, use_teacher_forcing,
+           teacher_forcing_ratio):
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
     criterion = torch.nn.NLLLoss()
     start = time.time()
     print_loss_total = 0  # Reset every print_every
     num_iter = 0
-    num_total_iters = len(indexes) * num_epochs
-    try:
-        logger.info('Starting training...')
-        for epoch in range(1, num_epochs+1):
-            for source_indexes, target_indexes in indexes:
-                source_tensor = torch.tensor(source_indexes, dtype=torch.long,
+    num_total_iters = len(indexed_pairs) * num_epochs
+    for epoch in range(1, num_epochs+1):
+        for source_indexes, target_indexes in indexed_pairs:
+            print(source_indexes)
+            for idx in range(0, min(len(source_indexes),
+                                    len(target_indexes)), max_seq_len):
+                if idx + max_seq_len > len(source_indexes):
+                    source = source_indexes[idx:]
+                else:
+                    source = source_indexes[idx: idx+max_seq_len]
+                if idx + max_seq_len > len(target_indexes):
+                    target = target_indexes[idx:]
+                else:
+                    target = target_indexes[idx: idx+max_seq_len]
+                print(source)
+                source_tensor = torch.tensor(source, dtype=torch.int,
                                              device=const.DEVICE).view(-1, 1)
-                target_tensor = torch.tensor(target_indexes, dtype=torch.long,
+                print(source_tensor)
+                target_tensor = torch.tensor(target, dtype=torch.int,
                                              device=const.DEVICE).view(-1, 1)
                 num_iter += 1
                 loss = _train_single_batch(
@@ -167,22 +174,16 @@ def _train(encoder, decoder, indexes, max_seq_len, with_attention, num_epochs,
                         epoch, num_epochs, time_info, num_iter,
                         round(num_iter / num_total_iters * 100),
                         round(print_loss_avg, 4)))
-        # TODO: fix this
-        # if output_dirpath:
-        #     save_dataset_and_models(output_dirpath, dataset, encoder, decoder,
-        #                             loss, learning_rate, with_attention)
-    except KeyboardInterrupt:
-        logger.info('Training interrupted')
-        # if output_dirpath:
-        #     save_dataset_and_models(output_dirpath, dataset, encoder, decoder,
-        #                             loss, learning_rate, with_attention)
-    return encoder, decoder
+    return encoder, decoder, loss
 
 
 def train(args):
     """Train the model."""
     logger.info('Training model from {}'.format(args.data))
-    if not os.path.exists(args.output_dirpath):
+    if not args.output_dirpath:
+        logger.warning('You haven\'t specified --output-dirpath. Models will '
+                       'not be saved!')
+    elif not os.path.exists(args.output_dirpath):
         logger.info('Creating output directory to save files to: {}'
                     .format(args.output_dirpath))
         os.makedirs(args.output_dirpath, exist_ok=True)
@@ -190,10 +191,19 @@ def train(args):
         logger.info('Training on GPU')
     else:
         logger.info('No GPU available. Training on CPU')
-    dataset = Dataset(args.data, args.character_based, args.shuffle,
-                      args.max_seq_len, args.reverse)
+    seq_pairs = putils.convert_to_seq_pairs(args.data)
+    dataset = Dataset(seq_pairs, args.shuffle, args.max_seq_len,
+                      args.min_count, args.reverse)
+    if args.reverse:
+        indexed_pairs = [(y, x) for x, y in dataset.indexed_pairs]
+        enc_input_size = dataset.right_vocab.size
+        dec_input_size = dataset.left_vocab.size
+    else:
+        indexed_pairs = dataset.indexed_pairs
+        enc_input_size = dataset.left_vocab.size
+        dec_input_size = dataset.right_vocab.size
     encoder = Encoder(model_type=args.model_type,
-                      input_size=dataset.source_vocab.size,
+                      input_size=enc_input_size,
                       hidden_size=args.hidden_size,
                       num_layers=args.num_layers,
                       nonlinearity=args.nonlinearity,
@@ -202,7 +212,7 @@ def train(args):
     if args.with_attention:
         decoder = Attention(model_type=args.model_type,
                             hidden_size=args.hidden_size,
-                            output_size=dataset.target_vocab.size,
+                            output_size=dec_input_size,
                             max_seq_len=dataset.max_seq_len,
                             num_layers=args.num_layers,
                             nonlinearity=args.nonlinearity,
@@ -211,16 +221,18 @@ def train(args):
     else:
         decoder = Decoder(model_type=args.model_type,
                           hidden_size=args.hidden_size,
-                          output_size=dataset.target_vocab.size,
+                          output_size=dec_input_size,
                           num_layers=args.num_layers,
                           nonlinearity=args.nonlinearity,
                           bias=args.bias, dropout=args.dropout,
                           bidirectional=args.bidirectional).to(const.DEVICE)
-    return _train(encoder, decoder, dataset.indexes, dataset.max_seq_len,
-                  args.with_attention, args.epochs,
-                  args.learning_rate, args.print_every,
-                  args.use_teacher_forcing, args.teacher_forcing_ratio,
-                  args.output_dirpath)
+    encoder, decoder, loss = _train(
+        encoder, decoder, indexed_pairs, dataset.max_seq_len,
+        args.with_attention, args.epochs, args.learning_rate, args.print_every,
+        args.use_teacher_forcing, args.teacher_forcing_ratio)
+    if args.output_dirpath:
+        save_dataset_and_models(args.output_dirpath, dataset, encoder, decoder,
+                                loss, args.learning_rate, args.with_attention)
 
 
 def _decode(source_indexes, encoder, decoder, with_attention, max_seq_len):
@@ -440,14 +452,11 @@ def main():
                               choices=['rnn', 'gru', 'lstm'],
                               default='gru',
                               help='encoder/decoder model type')
-    parser_train.add_argument('-c', '--character-based', action='store_true',
-                              help='if set, will switch from token-based to '
-                                   'character-based model. To be used only '
-                                   'for ortographic simplification, not '
-                                   'neural machine translation')
     parser_train.add_argument('-s', '--shuffle', action='store_true',
                               help='if set, will shuffle the training data')
-    parser_train.add_argument('-m', '--max-seq-len', type=int, default=0,
+    parser_train.add_argument('-c', '--min-count', type=int, default=2,
+                              help='min char count to be included in vocab')
+    parser_train.add_argument('-q', '--max-seq-len', type=int, default=0,
                               help='maximum sequence length to retain. If not '
                                    'set manually, will be set to the length '
                                    'of the longest sequence in the dataset')
@@ -457,7 +466,7 @@ def main():
                               help='number of layers to stack in the '
                                    'encoder/decoder models')
     parser_train.add_argument('-l', '--nonlinearity', choices=['tanh', 'relu'],
-                              default='tanh', help='activation function to '
+                              default='relu', help='activation function to '
                                                    'use. For RNN model only')
     parser_train.add_argument('-b', '--bias', action='store_true',
                               help='whether or not to use biases in '

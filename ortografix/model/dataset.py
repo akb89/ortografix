@@ -13,19 +13,18 @@ logger = logging.getLogger(__name__)
 class Vocab():
     """A Vocab class to process vocabularies for source/target sequences."""
 
-    def __init__(self, pairs=None, vocab_filepath=None,
-                 is_character_based=False, is_source=True, is_reversed=False,
-                 min_count=0):
+    def __init__(self, sequences=None, vocab_filepath=None, min_count=0):
         """Initialize vocabulary."""
-        if not (pairs or vocab_filepath):
+        if not (sequences or vocab_filepath):
             raise Exception('You must specify either pairs or '
                             'vocab_filepath to initialize the vocabulary')
-        if pairs and vocab_filepath:
+        if sequences and vocab_filepath:
             raise Exception('You cannot specify *both* pairs AND '
                             'vocab_filepath to initialize the vocabulary')
-        if pairs:
-            self._vocab = putils.create_vocab(
-                pairs, is_character_based, is_source, is_reversed, min_count)
+        if sequences:
+            self._counts = putils.count_chars(sequences)
+            self._vocab = putils.create_vocab(sequences, min_count,
+                                              self._counts)
         if vocab_filepath:
             self._vocab = putils.load_vocab(vocab_filepath)
 
@@ -35,64 +34,64 @@ class Vocab():
         return len(self._vocab)
 
     @property
-    def item2idx(self):
-        """Return token/character-to-idx mapping (dict)."""
+    def counts(self):
+        """Return the vocabulary items counts."""
+        return len(self._counts)
+
+    @property
+    def char2idx(self):
+        """Return char-to-idx mapping (dict)."""
         return self._vocab
 
     @property
-    def idx2item(self):
-        """Return idx-to-token/character mapping (dict)."""
-        return {idx: item for item, idx in self._vocab.items()}
+    def idx2char(self):
+        """Return idx-to-char mapping (dict)."""
+        return {idx: char for char, idx in self._vocab.items()}
 
 
 # pylint: disable=R0902
 class Dataset():
     """A dataset class to return source/target tensors from training data."""
 
-    def __init__(self, pairs, is_character_based, shuffle,
-                 max_seq_len, is_reversed, min_count):
+    def __init__(self, pairs, shuffle, max_seq_len, min_count, reverse):
         """Prepare input tensors.
 
         Prepare dictionaries for source and target items.
         Discretize input to indexes.
         Convert to tensors and concatenate by batch
         """
-        self._pairs = pairs
-        self._is_character_based = is_character_based
         self._shuffle = shuffle
-        self._is_reversed = is_reversed
+        self._reverse = reverse
+        self._left_vocab = Vocab(sequences=[pair[0] for pair in pairs],
+                                 min_count=min_count)
+        self._right_vocab = Vocab(sequences=[pair[1] for pair in pairs],
+                                  min_count=min_count)
+        self._indexed_pairs = putils.index_pairs(
+            pairs, self._left_vocab.char2idx, self._right_vocab.char2idx)
         if not max_seq_len:
-            self._max_seq_len = putils.get_max_seq_len(
-                pairs, is_character_based)
-            logger.info('max_seq_len not specified in args. Automatically setting '
-                        'to longest source sequence length = {}'
-                        .format(self._max_seq_len))
+            self._max_seq_len = putils.get_max_seq_len(self._indexed_pairs)
+            logger.info(
+                'max_seq_len not specified in args. Automatically setting to '
+                'longest source sequence length = {}'
+                .format(self._max_seq_len))
         else:
-            logger.info('Manually setting max_seq_len to {}'
-                        .format(max_seq_len))
             self._max_seq_len = max_seq_len
-        self._source_vocab = Vocab(pairs=pairs,
-                                   is_character_based=is_character_based,
-                                   is_source=True, is_reversed=is_reversed,
-                                   min_count=min_count)
-        self._target_vocab = Vocab(pairs=pairs,
-                                   is_character_based=is_character_based,
-                                   is_source=False, is_reversed=is_reversed,
-                                   min_count=min_count)
-        self._indexes = putils.index_pairs(
-            self._pairs, self._source_vocab.item2idx,
-            self._target_vocab.item2idx, self._is_character_based,
-            self._max_seq_len, self._is_reversed)
-
-    @property
-    def is_character_based(self):
-        """Return True if character-based, False if token-based."""
-        return self._is_character_based
+            logger.info('Manually setting max_seq_len to {}'
+                        .format(self._max_seq_len))
 
     @property
     def shuffle(self):
-        """Return True if dataset sentence pairs will be shuffled."""
+        """Return True if dataset sequence pairs will be shuffled."""
         return self._shuffle
+
+    @property
+    def reverse(self):
+        """Return True if sequence pairs should be reversed.
+
+        That is, return True if source/target is right/left instead of
+        left/right in the input sequence pair.
+        """
+        return self._reverse
 
     @property
     def max_seq_len(self):
@@ -100,26 +99,21 @@ class Dataset():
         return self._max_seq_len
 
     @property
-    def is_reversed(self):
-        """Return whether or not second item should be considered source."""
-        return self._is_reversed
+    def right_vocab(self):
+        """Return vocabulary corresponding to rightward elements in seq."""
+        return self._right_vocab
 
     @property
-    def source_vocab(self):
-        """Return vocabulary of source."""
-        return self._source_vocab
+    def left_vocab(self):
+        """Return vocabulary corresponding to leftward elements in seq."""
+        return self._left_vocab
 
     @property
-    def target_vocab(self):
-        """Return vocabulary of target."""
-        return self._target_vocab
-
-    @property
-    def indexes(self):
+    def indexed_pairs(self):
         """Return a list of source/target indexed sequences."""
         if self._shuffle:
-            random.shuffle(self._indexes)
-        return self._indexes
+            random.shuffle(self._indexed_pairs)
+        return self._indexed_pairs
 
     def save_params(self, output_dirpath):
         """Save vocabularies and dataset parameters."""
@@ -127,17 +121,14 @@ class Dataset():
         params_filepath = os.path.join(output_dirpath, 'dataset.params')
         with open(params_filepath, 'w', encoding='utf-8') as output_str:
             print('shuffle\t{}'.format(self._shuffle), file=output_str)
-            print('is_character_based\t{}'.format(self._is_character_based),
-                  file=output_str)
             print('max_seq_len\t{}'.format(self._max_seq_len), file=output_str)
-            print('is_reversed\t{}'.format(self._is_reversed), file=output_str)
-        logger.info('Saving source vocab...')
-        source_vocab_filepath = os.path.join(output_dirpath, 'source.vocab')
-        with open(source_vocab_filepath, 'w', encoding='utf-8') as source_str:
-            for item, idx in self._source_vocab.item2idx.items():
-                print('{}\t{}'.format(item, idx), file=source_str)
-        logger.info('Saving target vocab...')
-        target_vocab_filepath = os.path.join(output_dirpath, 'target.vocab')
-        with open(target_vocab_filepath, 'w', encoding='utf-8') as target_str:
-            for item, idx in self._target_vocab.item2idx.items():
-                print('{}\t{}'.format(item, idx), file=target_str)
+            print('min_count\t{}'.format(self._min_count), file=output_str)
+            print('reverse\t{}'.format(self._reverse), file=output_str)
+        left_vocab_filepath = os.path.join(output_dirpath, 'left.vocab')
+        with open(left_vocab_filepath, 'w', encoding='utf-8') as left_str:
+            for char, idx in self._left_vocab.char2idx.items():
+                print('{}\t{}'.format(char, idx), file=left_str)
+        right_vocab_filepath = os.path.join(output_dirpath, 'right.vocab')
+        with open(right_vocab_filepath, 'w', encoding='utf-8') as right_str:
+            for char, idx in self._right_vocab.char2idx.items():
+                print('{}\t{}'.format(char, idx), file=right_str)

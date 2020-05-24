@@ -15,7 +15,7 @@ class Encoder(torch.nn.Module):
     """Encoder class."""
 
     def __init__(self, model_type, input_size, hidden_size, num_layers=1,
-                 nonlinearity='tanh', bias=True, dropout=0,
+                 nonlinearity='relu', bias=True, dropout=0,
                  bidirectional=False):
         """Initialize encoder model."""
         if model_type not in ['rnn', 'gru', 'lstm']:
