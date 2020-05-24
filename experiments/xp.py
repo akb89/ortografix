@@ -8,7 +8,7 @@ from ortografix import Attention, Encoder, Dataset
 
 if __name__ == '__main__':
     NUM_XP = 10
-    DATA_FILEPATH = '/home/kabbach/ortografix/data/experts.students.sync.all.as.wordpairs.txt'
+    DATA_FILEPATH = '/home/debian/ortografix/data/experts.students.sync.all.as.wordpairs.txt'
     # DATA_FILEPATH = '/Users/akb/Github/ortografix/data/soundspel/experts.students.sync.all.as.unique.wordpairs.txt'
     # OUTPUT_DIRPATH = '/Users/akb/Github/ortografix/models/xp001/'
     SHUFFLE = True
