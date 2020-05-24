@@ -9,7 +9,7 @@ from ortografix import Attention, Encoder, Dataset
 if __name__ == '__main__':
     NUM_XP = 10
     DATA_FILEPATH = '/home/debian/ortografix/data/experts.students.sync.all.as.wordpairs.txt'
-    # DATA_FILEPATH = '/Users/akb/Github/ortografix/data/soundspel/experts.students.sync.all.as.unique.wordpairs.txt'
+    # DATA_FILEPATH = '/Users/akb/Github/ortografix/data/soundspel/experts.students.sync.all.as.wordpairs.txt'
     # OUTPUT_DIRPATH = '/Users/akb/Github/ortografix/models/xp001/'
     SHUFFLE = True
     ITEMIZE = False
@@ -23,8 +23,7 @@ if __name__ == '__main__':
     DROPOUT = 0
     BIDIRECTIONAL = True
     LEARNING_RATE = 0.01
-    EPOCHS = 10
-    USE_TEACHER_FORCING = True
+    EPOCHS = 5
     TEACHER_FORCING_RATIO = 0.5
     WITH_ATTENTION = True
     PRINT_EVERY = 1000
@@ -65,8 +64,7 @@ if __name__ == '__main__':
                             bidirectional=BIDIRECTIONAL).to(ortografix.DEVICE)
         ortografix.train(encoder, decoder, dataset.indexed_pairs,
                          dataset.max_seq_len, WITH_ATTENTION, EPOCHS,
-                         LEARNING_RATE, PRINT_EVERY, USE_TEACHER_FORCING,
-                         TEACHER_FORCING_RATIO)
+                         LEARNING_RATE, PRINT_EVERY, TEACHER_FORCING_RATIO)
         _, nsim, dl_nsim = ortografix.evaluate(
             test_indexed_pairs, ITEMIZE, encoder, decoder,
             dataset.right_vocab.idx2char, WITH_ATTENTION, dataset.max_seq_len)

@@ -77,8 +77,8 @@ def save_dataset_and_models(output_dirpath, dataset, encoder, decoder, loss,
 # pylint: disable=R0914,E1102
 def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
                         with_attention, encoder_optimizer, decoder_optimizer,
-                        max_seq_len, criterion, use_teacher_forcing,
-                        teacher_forcing_ratio, last_decoder_pred_idx):
+                        max_seq_len, criterion, teacher_forcing_ratio,
+                        last_decoder_pred_idx):
     encoder_hidden = encoder.init_hidden()
     encoder_optimizer.zero_grad()
     decoder_optimizer.zero_grad()
@@ -132,8 +132,7 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
 
 
 def _train(encoder, decoder, indexed_pairs, max_seq_len, with_attention,
-           num_epochs, learning_rate, print_every, use_teacher_forcing,
-           teacher_forcing_ratio):
+           num_epochs, learning_rate, print_every, teacher_forcing_ratio):
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
     criterion = torch.nn.NLLLoss()
@@ -162,8 +161,8 @@ def _train(encoder, decoder, indexed_pairs, max_seq_len, with_attention,
                 loss, last_decoder_pred_idx = _train_single_batch(
                     source_tensor, target_tensor, encoder, decoder,
                     with_attention, encoder_optimizer, decoder_optimizer,
-                    max_seq_len, criterion, use_teacher_forcing,
-                    teacher_forcing_ratio, last_decoder_pred_idx)
+                    max_seq_len, criterion, teacher_forcing_ratio,
+                    last_decoder_pred_idx)
                 print_loss_total += loss
                 if num_iter % print_every == 0:
                     print_loss_avg = print_loss_total / print_every
@@ -229,7 +228,7 @@ def train(args):
     encoder, decoder, loss = _train(
         encoder, decoder, indexed_pairs, dataset.max_seq_len,
         args.with_attention, args.epochs, args.learning_rate, args.print_every,
-        args.use_teacher_forcing, args.teacher_forcing_ratio)
+        args.teacher_forcing_ratio)
     if args.output_dirpath:
         save_dataset_and_models(args.output_dirpath, dataset, encoder, decoder,
                                 loss, args.learning_rate, args.with_attention)
@@ -531,9 +530,6 @@ def main():
                               help='number of epochs')
     parser_train.add_argument('-p', '--print-every', type=int, default=1000,
                               help='how often to print out loss information')
-    parser_train.add_argument('-u', '--use-teacher-forcing',
-                              action='store_true',
-                              help='if set, will use teacher forcing')
     parser_train.add_argument('-f', '--teacher-forcing-ratio', type=float,
                               default=0.5, help='teacher forcing ratio')
     parser_train.add_argument('-a', '--output-dirpath',
