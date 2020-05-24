@@ -7,6 +7,7 @@ import os
 import argparse
 import random
 import time
+import itertools
 import logging
 import logging.config
 
@@ -280,22 +281,45 @@ def _decode(source_indexes, encoder, decoder, with_attention, max_seq_len):
         return decoded_indexes, decoder_attentions[:didx + 1]
 
 
-def _evaluate(indexed_pairs, encoder, decoder, idx2char, with_attention,
-              max_seq_len):
+def decode(sequence, itemize, encoder, decoder, with_attention, max_seq_len):
+    predicted_idxx = []
+    if itemize:
+        key = lambda sep: sep == const.SEP_IDX
+        seqx = [list(group) for is_key, group in
+                itertools.groupby(sequence, key) if not is_key]
+        for chars in seqx:
+            if chars[0] != const.SOS_IDX:
+                chars.insert(0, const.SOS_IDX)
+            if chars[-1] != const.EOS_IDX:
+                chars.append(const.EOS_IDX)
+            predicted_idx, _ = _decode(chars, encoder, decoder, with_attention,
+                                       max_seq_len)
+            predicted_idxx.extend(predicted_idx)
+            predicted_idxx.append(const.SEP_IDX)
+        predicted_idxx.pop()
+
+    else:
+        predicted_idxx, _ = _decode(sequence, encoder, decoder,with_attention,
+                                    max_seq_len)
+    return predicted_idxx
+
+
+def _evaluate(indexed_pairs, itemize, encoder, decoder, idx2char,
+              with_attention, max_seq_len):
     avg_dist = []
     avg_dl = []
     # avg_norm_dist = []
     nsim = []
     dl_nsim = []
     for seq in indexed_pairs:
-        pred_idx, _ = _decode(seq[0], encoder, decoder, with_attention,
-                              max_seq_len)
-        gold = ''.join(
+        pred_idx = decode(seq[0], itemize, encoder, decoder, with_attention,
+                          max_seq_len)
+        gold = ' '.join(''.join(
             [idx2char[idx] for idx in seq[1] if idx not in
-             [const.SOS_IDX, const.EOS_IDX]])
-        prediction = ''.join(
+             [const.SOS_IDX, const.EOS_IDX]]).split(const.SEP))
+        prediction = ' '.join(''.join(
             [idx2char[idx] for idx in pred_idx if idx not in
-             [const.SOS_IDX, const.EOS_IDX]])
+             [const.SOS_IDX, const.EOS_IDX]]).split(const.SEP))
         avg_dist.append(dist.levenshtein.distance(gold, prediction))
         avg_dl.append(dist.damerau_levenshtein.distance(gold, prediction))
         # avg_norm_dist.append(dist.levenshtein.normalized_distance(gold,
@@ -384,18 +408,28 @@ def evaluate(args):
         for seq_num in range(args.random):
             seq = indexed_pairs[seq_num]
             print('-'*80)
-            print('>', ' '.join([left_vocab.idx2char[idx]
-                                 for idx in seq[0]]))
-            print('=', ' '.join([right_vocab.idx2char[idx]
-                                 for idx in seq[1]]))
-            predicted_idx, _ = _decode(seq[0], encoder, decoder,
-                                       checkpoint['with_attention'],
-                                       dataset_params['max_seq_len'])
-            print('<', ' '.join([right_vocab.idx2char[idx]
-                                 for idx in predicted_idx]))
+            input_str = ' '.join(
+                ''.join([left_vocab.idx2char[idx] for idx in seq[0] if idx
+                         not in [const.SOS_IDX, const.EOS_IDX]])
+                .split(const.SEP))
+            gold_str = ' '.join(
+                ''.join([right_vocab.idx2char[idx] for idx in seq[1] if idx
+                         not in [const.SOS_IDX, const.EOS_IDX]])
+                .split(const.SEP))
+            predicted_idxx = decode(seq[0], args.itemize, encoder, decoder,
+                                    checkpoint['with_attention'],
+                                    dataset_params['max_seq_len'])
+            pred_str = ' '.join(
+                ''.join([right_vocab.idx2char[idx] for idx in predicted_idxx
+                         if idx not in [const.SOS_IDX, const.EOS_IDX]])
+                .split(const.SEP))
+            print('>', input_str)
+            print('=', gold_str)
+            print('<', pred_str)
     else:
-        _evaluate(indexed_pairs, encoder, decoder, right_vocab.idx2char,
-                  checkpoint['with_attention'], dataset_params['max_seq_len'])
+        _evaluate(indexed_pairs, args.itemize, encoder, decoder,
+                  right_vocab.idx2char, checkpoint['with_attention'],
+                  dataset_params['max_seq_len'])
 
 
 def convert(args):
@@ -512,5 +546,9 @@ def main():
     parser_evaluate.add_argument('-r', '--random', type=int, default=0,
                                  help='if > 0, will test on n sequences '
                                       'randomly selected from test set')
+    parser_evaluate.add_argument('-i', '--itemize', action='store_true',
+                                 help='if set, will predict token-by-token'
+                                      'in the sequence rather than the whole'
+                                      'sequence at once')
     args = parser.parse_args()
     args.func(args)
