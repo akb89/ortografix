@@ -4,12 +4,12 @@ import random
 import statistics as stats
 
 import ortografix
-from ortografix import Attention, Encoder, Dataset, Decoder
+from ortografix import Attention, Encoder, Dataset
 
 if __name__ == '__main__':
-    NUM_XP = 10
-    DATA_FILEPATH = '/home/kabbach/ortografix/data/experts.all.as.wordpairs.txt'
-    # DATA_FILEPATH = '/Users/akb/Github/ortografix/data/soundspel/experts.all.as.wordpairs.txt'
+    NUM_XP = 1
+    # DATA_FILEPATH = '/home/kabbach/ortografix/data/experts.all.as.wordpairs.txt'
+    DATA_FILEPATH = '/Users/akb/Github/ortografix/data/soundspel/experts.all.as.wordpairs.txt'
     # OUTPUT_DIRPATH = '/Users/akb/Github/ortografix/models/xp001/'
     CHARACTER_BASED = True
     SHUFFLE = True
@@ -23,15 +23,14 @@ if __name__ == '__main__':
     DROPOUT = 0
     BIDIRECTIONAL = True
     LEARNING_RATE = 0.01
-    EPOCHS = 10
+    EPOCHS = 1
     USE_TEACHER_FORCING = True
     TEACHER_FORCING_RATIO = 0.5
     WITH_ATTENTION = True
     PRINT_EVERY = 100
     MIN_COUNT = 2
-    dists = []
-    norm_dists = []
-    norm_sims = []
+    nsims = []
+    dl_nsims = []
     pairs = []
     with open(DATA_FILEPATH, 'r', encoding='utf-8') as input_str:
         for line in input_str:
@@ -69,15 +68,14 @@ if __name__ == '__main__':
                          dataset.max_seq_len, WITH_ATTENTION, EPOCHS,
                          LEARNING_RATE, PRINT_EVERY, USE_TEACHER_FORCING,
                          TEACHER_FORCING_RATIO)
-        dist, norm_dist, norm_sim = ortografix.evaluate(
+        _, nsim, dl_nsim = ortografix.evaluate(
             test_indexes, encoder, decoder, dataset.target_vocab,
             WITH_ATTENTION, dataset.max_seq_len)
-        dists.append(dist)
-        norm_dists.append(norm_dist)
-        norm_sims.append(norm_sim)
-    print('avg dist = {}'.format(stats.mean(dists)))
-    if len(dists) > 1:
-        print('std dist = {}'.format(stats.stdev(dists)))
-    print('avg nsim = {}'.format(stats.mean(norm_sims)))
-    if len(norm_sims) > 1:
-        print('std nsim = {}'.format(stats.stdev(norm_sims)))
+        nsims.append(nsim)
+        dl_nsims.append(dl_nsim)
+    print('avg nsim = {}'.format(stats.mean(nsims)))
+    if len(nsims) > 1:
+        print('std nsim = {}'.format(stats.stdev(nsims)))
+    print('avg DL nsim = {}'.format(stats.mean(dl_nsims)))
+    if len(dl_nsims) > 1:
+        print('std DL nsim = {}'.format(stats.stdev(dl_nsims)))

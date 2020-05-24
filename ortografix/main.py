@@ -12,9 +12,9 @@ import logging.config
 
 import statistics as stats
 
-import textdistance
 import torch
 from torch import optim
+import textdistance as dist
 
 import ortografix.utils.config as cutils
 import ortografix.utils.constants as const
@@ -265,8 +265,10 @@ def _decode(source_indexes, encoder, decoder, with_attention, max_seq_len):
 def _evaluate(indexes, encoder, decoder, target_vocab, with_attention,
               max_seq_len):
     avg_dist = []
-    avg_norm_dist = []
-    avg_norm_sim = []
+    avg_dl = []
+    # avg_norm_dist = []
+    nsim = []
+    dl_nsim = []
     for seq in indexes:
         pred_idx, _ = _decode(seq[0], encoder, decoder, with_attention,
                               max_seq_len)
@@ -276,21 +278,23 @@ def _evaluate(indexes, encoder, decoder, target_vocab, with_attention,
         prediction = ''.join(
             [target_vocab.idx2item[idx] for idx in pred_idx if idx not in
              [const.SOS_IDX, const.EOS_IDX]])
-        avg_dist.append(textdistance.levenshtein.distance(gold,
-                                                          prediction))
-        avg_norm_dist.append(textdistance.levenshtein.normalized_distance(
+        avg_dist.append(dist.levenshtein.distance(gold, prediction))
+        avg_dl.append(dist.damerau_levenshtein.distance(gold, prediction))
+        # avg_norm_dist.append(dist.levenshtein.normalized_distance(gold,
+        #                                                           prediction))
+        nsim.append(dist.levenshtein.normalized_similarity(gold, prediction))
+        dl_nsim.append(dist.damerau_levenshtein.normalized_similarity(
             gold, prediction))
-        avg_norm_sim.append(textdistance.levenshtein.normalized_similarity(
-            gold, prediction))
-    logger.info('Printing Levenshtein edit distance info:')
+    logger.info('Printing edit distance info:')
     logger.info('   total sum dist = {}'.format(sum(avg_dist)))
+    logger.info('   total sum DL = {}'.format(sum(avg_dl)))
     logger.info('   avg dist = {}'.format(stats.mean(avg_dist)))
-    # logger.info('   avg sim = {}'.format(statistics.mean(avg_sim)))
-    logger.info('   avg normalized dist = {}'
-                .format(stats.mean(avg_norm_dist)))
-    logger.info('   avg normalized sim = {}'
-                .format(stats.mean(avg_norm_sim)))
-    return stats.mean(avg_dist), stats.mean(avg_norm_dist), stats.mean(avg_norm_sim)
+    logger.info('   avg DL = {}'.format(stats.mean(avg_dl)))
+    # logger.info('   avg normalized dist = {}'
+    #             .format(stats.mean(avg_norm_dist)))
+    logger.info('   avg normalized sim = {}'.format(stats.mean(nsim)))
+    logger.info('   avg normalized DL sim = {}'.format(stats.mean(dl_nsim)))
+    return stats.mean(avg_dist), stats.mean(nsim), stats.mean(dl_nsim)
 
 
 def evaluate(args):
