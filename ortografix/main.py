@@ -77,7 +77,7 @@ def save_dataset_and_models(output_dirpath, dataset, encoder, decoder, loss,
 def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
                         with_attention, encoder_optimizer, decoder_optimizer,
                         max_seq_len, criterion, use_teacher_forcing,
-                        teacher_forcing_ratio):
+                        teacher_forcing_ratio, last_decoder_pred_idx):
     encoder_hidden = encoder.init_hidden()
     encoder_optimizer.zero_grad()
     decoder_optimizer.zero_grad()
@@ -94,7 +94,8 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
         encoder_output, encoder_hidden = encoder(source_tensor[eidx],
                                                  encoder_hidden)
         encoder_outputs[eidx] = encoder_output[0, 0]
-    decoder_input = torch.tensor([[]], device=const.DEVICE)
+    decoder_input = torch.tensor([[last_decoder_pred_idx]],
+                                 device=const.DEVICE)
     decoder_hidden = encoder_hidden
     use_teacher_forcing = random.random() < teacher_forcing_ratio
     if use_teacher_forcing:
@@ -126,7 +127,7 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
     loss.backward()
     encoder_optimizer.step()
     decoder_optimizer.step()
-    return loss.item() / target_length
+    return loss.item() / target_length, decoder_input.item()
 
 
 def _train(encoder, decoder, indexed_pairs, max_seq_len, with_attention,
@@ -141,7 +142,7 @@ def _train(encoder, decoder, indexed_pairs, max_seq_len, with_attention,
     num_total_iters = len(indexed_pairs) * num_epochs
     for epoch in range(1, num_epochs+1):
         for source_indexes, target_indexes in indexed_pairs:
-            print(source_indexes)
+            last_decoder_pred_idx = const.SOS_IDX
             for idx in range(0, min(len(source_indexes),
                                     len(target_indexes)), max_seq_len):
                 if idx + max_seq_len > len(source_indexes):
@@ -152,18 +153,16 @@ def _train(encoder, decoder, indexed_pairs, max_seq_len, with_attention,
                     target = target_indexes[idx:]
                 else:
                     target = target_indexes[idx: idx+max_seq_len]
-                print(source)
-                source_tensor = torch.tensor(source, dtype=torch.int,
+                source_tensor = torch.tensor(source, dtype=torch.long,
                                              device=const.DEVICE).view(-1, 1)
-                print(source_tensor)
-                target_tensor = torch.tensor(target, dtype=torch.int,
+                target_tensor = torch.tensor(target, dtype=torch.long,
                                              device=const.DEVICE).view(-1, 1)
                 num_iter += 1
-                loss = _train_single_batch(
+                loss, last_decoder_pred_idx = _train_single_batch(
                     source_tensor, target_tensor, encoder, decoder,
                     with_attention, encoder_optimizer, decoder_optimizer,
                     max_seq_len, criterion, use_teacher_forcing,
-                    teacher_forcing_ratio)
+                    teacher_forcing_ratio, last_decoder_pred_idx)
                 print_loss_total += loss
                 if num_iter % print_every == 0:
                     print_loss_avg = print_loss_total / print_every
@@ -237,58 +236,65 @@ def train(args):
 
 def _decode(source_indexes, encoder, decoder, with_attention, max_seq_len):
     with torch.no_grad():
-        input_tensor = torch.tensor(source_indexes, dtype=torch.long,
-                                    device=const.DEVICE).view(-1, 1)
-        input_length = input_tensor.size()[0]
-        encoder_hidden = encoder.init_hidden()
-        # add 2 to max_seq_len to include SOS and EOS
-        if encoder.bidirectional:
-            encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size*2,
-                                          device=const.DEVICE)
-        else:
-            encoder_outputs = torch.zeros(max_seq_len+2, encoder.hidden_size,
-                                          device=const.DEVICE)
-        for eidx in range(input_length):
-            encoder_output, encoder_hidden = encoder(
-                input_tensor[eidx], encoder_hidden)
-            encoder_outputs[eidx] += encoder_output[0, 0]
-        decoder_input = torch.tensor([[const.SOS_IDX]], device=const.DEVICE)
-        decoder_hidden = encoder_hidden
+        last_decoder_pred_idx = const.SOS_IDX
         decoded_indexes = []
-        # add 2 to max_seq_len to include SOS and EOS
-        decoder_attentions = torch.zeros(max_seq_len+2, max_seq_len+2)
-        for didx in range(max_seq_len+2):
-            if with_attention:
-                decoder_output, decoder_hidden, decoder_attention = decoder(
-                    decoder_input, decoder_hidden, encoder_outputs)
-                decoder_attentions[didx] = decoder_attention.data
+        for idx in range(0, len(source_indexes), max_seq_len):
+            if idx + max_seq_len > len(source_indexes):
+                source = source_indexes[idx:]
             else:
-                decoder_output, decoder_hidden = decoder(decoder_input,
-                                                         decoder_hidden)
-            _, topi = decoder_output.data.topk(1)
-            if topi.item() == const.EOS_IDX:
-                decoded_indexes.append(const.EOS_IDX)
-                break
-            decoded_indexes.append(topi.item())
-            decoder_input = topi.squeeze().detach()
+                source = source_indexes[idx: idx+max_seq_len]
+            input_tensor = torch.tensor(source, dtype=torch.long,
+                                        device=const.DEVICE).view(-1, 1)
+            input_length = input_tensor.size()[0]
+            encoder_hidden = encoder.init_hidden()
+            if encoder.bidirectional:
+                encoder_outputs = torch.zeros(max_seq_len,
+                                              encoder.hidden_size*2,
+                                              device=const.DEVICE)
+            else:
+                encoder_outputs = torch.zeros(max_seq_len, encoder.hidden_size,
+                                              device=const.DEVICE)
+            for eidx in range(input_length):
+                encoder_output, encoder_hidden = encoder(
+                    input_tensor[eidx], encoder_hidden)
+                encoder_outputs[eidx] += encoder_output[0, 0]
+            decoder_input = torch.tensor([[last_decoder_pred_idx]],
+                                         device=const.DEVICE)
+            decoder_hidden = encoder_hidden
+            decoder_attentions = torch.zeros(max_seq_len, max_seq_len)
+            for didx in range(max_seq_len):
+                if with_attention:
+                    decoder_output, decoder_hidden, decoder_attention = decoder(
+                        decoder_input, decoder_hidden, encoder_outputs)
+                    decoder_attentions[didx] = decoder_attention.data
+                else:
+                    decoder_output, decoder_hidden = decoder(decoder_input,
+                                                             decoder_hidden)
+                _, topi = decoder_output.data.topk(1)
+                if topi.item() == const.EOS_IDX:
+                    decoded_indexes.append(const.EOS_IDX)
+                    break
+                decoded_indexes.append(topi.item())
+                decoder_input = topi.squeeze().detach()
+            last_decoder_pred_idx = decoder_input.item()
         return decoded_indexes, decoder_attentions[:didx + 1]
 
 
-def _evaluate(indexes, encoder, decoder, target_vocab, with_attention,
+def _evaluate(indexed_pairs, encoder, decoder, idx2char, with_attention,
               max_seq_len):
     avg_dist = []
     avg_dl = []
     # avg_norm_dist = []
     nsim = []
     dl_nsim = []
-    for seq in indexes:
+    for seq in indexed_pairs:
         pred_idx, _ = _decode(seq[0], encoder, decoder, with_attention,
                               max_seq_len)
         gold = ''.join(
-            [target_vocab.idx2item[idx] for idx in seq[1] if idx not in
+            [idx2char[idx] for idx in seq[1] if idx not in
              [const.SOS_IDX, const.EOS_IDX]])
         prediction = ''.join(
-            [target_vocab.idx2item[idx] for idx in pred_idx if idx not in
+            [idx2char[idx] for idx in pred_idx if idx not in
              [const.SOS_IDX, const.EOS_IDX]])
         avg_dist.append(dist.levenshtein.distance(gold, prediction))
         avg_dl.append(dist.damerau_levenshtein.distance(gold, prediction))
@@ -313,10 +319,10 @@ def evaluate(args):
     """Evaluate a given model on a test set."""
     dataset_param_filepath = os.path.join(args.model, 'dataset.params')
     dataset_params = putils.load_params(dataset_param_filepath)
-    source_vocab_filepath = os.path.join(args.model, 'source.vocab')
-    source_vocab = Vocab(vocab_filepath=source_vocab_filepath)
-    target_vocab_filepath = os.path.join(args.model, 'target.vocab')
-    target_vocab = Vocab(vocab_filepath=target_vocab_filepath)
+    left_vocab_filepath = os.path.join(args.model, 'left.vocab')
+    left_vocab = Vocab(vocab_filepath=left_vocab_filepath)
+    right_vocab_filepath = os.path.join(args.model, 'right.vocab')
+    right_vocab = Vocab(vocab_filepath=right_vocab_filepath)
     model_params_filepath = os.path.join(args.model, 'model.params')
     model_params = putils.load_params(model_params_filepath)
     checkpoint_filepath = os.path.join(args.model, 'checkpoint.tar')
@@ -368,28 +374,28 @@ def evaluate(args):
         decoder.to(const.DEVICE)
     encoder.eval()
     decoder.eval()
-    indexes = putils.index_dataset(
-        args.data, source_vocab.item2idx, target_vocab.item2idx,
-        dataset_params['is_character_based'], dataset_params['max_seq_len'],
-        dataset_params['is_reversed'])
+    pairs = putils.convert_to_seq_pairs(args.data)
+    indexed_pairs = putils.index_pairs(pairs, left_vocab.char2idx,
+                                       right_vocab.char2idx)
+    if dataset_params['reverse']:
+        raise Exception('Unsupported reverse option')
     if args.random > 0:
-        random.shuffle(indexes)
+        random.shuffle(indexed_pairs)
         for seq_num in range(args.random):
-            seq = indexes[seq_num]
+            seq = indexed_pairs[seq_num]
             print('-'*80)
-            print('>', ' '.join([source_vocab.idx2item[idx]
+            print('>', ' '.join([left_vocab.idx2char[idx]
                                  for idx in seq[0]]))
-            print('=', ' '.join([target_vocab.idx2item[idx]
+            print('=', ' '.join([right_vocab.idx2char[idx]
                                  for idx in seq[1]]))
-            # TODO: add support for OOV
             predicted_idx, _ = _decode(seq[0], encoder, decoder,
                                        checkpoint['with_attention'],
                                        dataset_params['max_seq_len'])
-            print('<', ' '.join([target_vocab.idx2item[idx]
+            print('<', ' '.join([right_vocab.idx2char[idx]
                                  for idx in predicted_idx]))
     else:
-        _evaluate(indexes, encoder, decoder, target_vocab, checkpoint,
-                  dataset_params)
+        _evaluate(indexed_pairs, encoder, decoder, right_vocab.idx2char,
+                  checkpoint['with_attention'], dataset_params['max_seq_len'])
 
 
 def convert(args):

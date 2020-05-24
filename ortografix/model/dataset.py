@@ -62,6 +62,7 @@ class Dataset():
         """
         self._shuffle = shuffle
         self._reverse = reverse
+        self._min_count = min_count
         self._left_vocab = Vocab(sequences=[pair[0] for pair in pairs],
                                  min_count=min_count)
         self._right_vocab = Vocab(sequences=[pair[1] for pair in pairs],

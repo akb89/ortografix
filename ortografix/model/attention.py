@@ -11,14 +11,14 @@ class Attention(torch.nn.Module):
     """Attention class."""
 
     def __init__(self, model_type, hidden_size, output_size, max_seq_len,
-                 num_layers=1, nonlinearity='tanh', bias=True, dropout=0,
+                 num_layers=1, nonlinearity='relu', bias=True, dropout=0,
                  bidirectional=False):
         """Initialize attention model."""
         super(Attention, self).__init__()
         self.model_type = model_type
         self.hidden_size = hidden_size
         self.output_size = output_size
-        self.max_seq_len = max_seq_len+2  # add SOS and EOS
+        self.max_seq_len = max_seq_len
         self.num_layers = num_layers
         self.nonlinearity = nonlinearity
         self.bias = bias

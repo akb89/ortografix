@@ -11,7 +11,6 @@ if __name__ == '__main__':
     # DATA_FILEPATH = '/home/kabbach/ortografix/data/experts.all.as.wordpairs.txt'
     DATA_FILEPATH = '/Users/akb/Github/ortografix/data/soundspel/experts.all.as.wordpairs.txt'
     # OUTPUT_DIRPATH = '/Users/akb/Github/ortografix/models/xp001/'
-    CHARACTER_BASED = True
     SHUFFLE = True
     MAX_SEQ_LEN = 0
     REVERSE = False
