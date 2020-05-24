@@ -433,16 +433,21 @@ def evaluate(args):
 
 
 def convert(args):
-    """Convert text file with aligned words and sent to unique word pairs."""
-    output_filepath = '{}.as.wordpairs.txt'.format(args.data.split('.txt')[0])
-    pairs = set()
+    """Convert text file with aligned words and sent to word pairs."""
+    if args.unique:
+        output_filepath = '{}.as.unique.wordpairs.txt'.format(
+            args.data.split('.txt')[0])
+    else:
+        output_filepath = '{}.as.wordpairs.txt'.format(
+            args.data.split('.txt')[0])
+    pairs = []
     logger.info('Saving output to {}'.format(output_filepath))
     with open(args.data, 'r', encoding='utf-8') as input_stream:
         for line in input_stream:
             line = line.strip()
             seq = line.split('\t')
             if len(seq[0].split()) == 1:
-                pairs.add((seq[0], seq[1]))
+                pairs.append((seq[0], seq[1]))
             else:
                 xtokens = seq[0].split()
                 ytokens = seq[1].split()
@@ -451,7 +456,9 @@ def convert(args):
                         'Invalid input sequences: should contain the same '
                         'number of tokens: \n {} \n {}'.format(seq[0], seq[1]))
                 for xtoken, ytoken in zip(xtokens, ytokens):
-                    pairs.add((xtoken, ytoken))
+                    pairs.append((xtoken, ytoken))
+    if args.unique:
+        pairs = set(pairs)
     with open(output_filepath, 'w', encoding='utf-8') as output_str:
         for pair in sorted(pairs):
             print('{}\t{}'.format(pair[0], pair[1]), file=output_str)
@@ -482,6 +489,8 @@ def main():
     parser_convert.set_defaults(func=convert)
     parser_convert.add_argument('-d', '--data', required=True,
                                 help='absolute path to input file to convert')
+    parser_convert.add_argument('-u', '--unique', action='store_true',
+                                help='if set, will return unique pairs only')
     parser_train = subparsers.add_parser(
         'train', formatter_class=argparse.RawTextHelpFormatter,
         help='train the seq2seq model')

@@ -17,9 +17,17 @@ def get_max_seq_len(indexed_pairs):
     indexes already include SOS/EOS/SEP.
     """
     max_seq_len = 0
+    # max_seq = ''
     for indexed_pair in indexed_pairs:
         max_seq_len = max(max_seq_len, len(indexed_pair[0]))
         max_seq_len = max(max_seq_len, len(indexed_pair[1]))
+        # if len(indexed_pair[0]) > max_seq_len:
+        #     max_seq_len = len(indexed_pair[0])
+        #     max_seq = indexed_pair[0]
+        # if len(indexed_pair[1]) > max_seq_len:
+        #     max_seq_len = len(indexed_pair[1])
+        #     max_seq = indexed_pair[1]
+    # print(max_seq_len, max_seq)
     return max_seq_len
 
 
