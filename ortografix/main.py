@@ -161,6 +161,9 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
             if decoder_input.item() == const.EOS_IDX:
                 break
     loss.backward()
+    # if encoder.model_type == 'transformer':
+    #     torch.nn.utils.clip_grad_norm_(encoder.parameters(), 0.5)
+    #     torch.nn.utils.clip_grad_norm_(decoder.parameters(), 0.5)
     encoder_optimizer.step()
     decoder_optimizer.step()
     return loss.item() / target_length, decoder_input.item()
@@ -168,9 +171,19 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
 
 def _train(encoder, decoder, indexed_pairs, max_seq_len, num_epochs,
            learning_rate, print_every, teacher_forcing_ratio):
+    criterion = torch.nn.NLLLoss()
+    # if encoder.model_type == 'transformer':
+    #     encoder_optimizer = torch.optim.SGD(encoder.parameters(), lr=5.0)
+    #     encoder_scheduler = torch.optim.lr_scheduler.StepLR(
+    #         encoder_optimizer, 1.0, gamma=0.95)
+    #     decoder_optimizer = torch.optim.SGD(encoder.parameters(), lr=5.0)
+    #     decoder_scheduler = torch.optim.lr_scheduler.StepLR(
+    #         decoder_optimizer, 1.0, gamma=0.95)
+    # else:
+    #     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
+    #     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
-    criterion = torch.nn.NLLLoss()
     start = time.time()
     print_loss_total = 0  # Reset every print_every
     num_iter = 0
@@ -208,6 +221,9 @@ def _train(encoder, decoder, indexed_pairs, max_seq_len, num_epochs,
                         epoch, num_epochs, time_info, num_iter,
                         round(num_iter / num_total_iters * 100),
                         round(print_loss_avg, 4)))
+        # if encoder.model_type == 'transformer':
+        #     encoder_scheduler.step()
+        #     decoder_scheduler.step()
     return encoder, decoder, loss
 
 
@@ -263,7 +279,8 @@ def train(args):
                             num_layers=args.num_layers,
                             nonlinearity=args.nonlinearity,
                             bias=args.bias,
-                            dropout=args.dropout).to(const.DEVICE)
+                            dropout=args.dropout,
+                            bidirectional=args.bidirectional).to(const.DEVICE)
     else:
         decoder = Decoder(model_type=args.model_type,
                           hidden_size=args.hidden_size,

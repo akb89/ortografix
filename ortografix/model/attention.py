@@ -37,6 +37,7 @@ class Attention(torch.nn.Module):
             num_layers=num_layers, bias=bias, batch_first=False,
             dropout=dropout, bidirectional=False)
         self.out = torch.nn.Linear(self.hidden_size, self.output_size)
+        self.softmax = torch.nn.LogSoftmax(dim=1)
 
     # pylint: disable=R1710, W0221
     def forward(self, input_tensor, hidden, encoder_outputs):
@@ -54,7 +55,7 @@ class Attention(torch.nn.Module):
         output = self.attn_combine(output).unsqueeze(0)
         output = torch.nn.functional.relu(output)
         output, hidden = self.gru(output, hidden)
-        output = torch.nn.functional.log_softmax(self.out(output[0]), dim=1)
+        output = self.softmax(self.out(output[0]))
         return output, hidden, attn_weights
 
     def init_hidden(self):
