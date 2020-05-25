@@ -25,7 +25,6 @@ if __name__ == '__main__':
     LEARNING_RATE = 0.01
     EPOCHS = 5
     TEACHER_FORCING_RATIO = 0.5
-    WITH_ATTENTION = False
     PRINT_EVERY = 1000
     MIN_COUNT = 2
     nsims = []
