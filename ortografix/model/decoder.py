@@ -27,6 +27,7 @@ class Decoder(torch.nn.Module):
         self.nonlinearity = nonlinearity
         self.bias = bias
         self.dropout = dropout
+        self.with_attention = False
         self.embedding = torch.nn.Embedding(output_size, hidden_size)
         if self.model_type == 'rnn':
             self.rnn = torch.nn.RNN(

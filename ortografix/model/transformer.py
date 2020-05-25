@@ -21,6 +21,7 @@ class TDecoder(torch.nn.Module):
         self.output_size = output_size
         self.num_layers = num_layers
         self.dropout = dropout
+        self.num_attention_heads = num_attention_heads
         self.embedding = torch.nn.Embedding(output_size, hidden_size)
         decoder_layers = torch.nn.TransformerDecoderLayer(
             d_model=hidden_size, nhead=num_attention_heads,
@@ -58,6 +59,7 @@ class TEncoder(torch.nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.dropout = dropout
+        self.num_attention_heads = num_attention_heads
         self.embedding = torch.nn.Embedding(input_size, hidden_size)
         encoder_layers = torch.nn.TransformerEncoderLayer(
             d_model=hidden_size, nhead=num_attention_heads,

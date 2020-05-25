@@ -4,7 +4,7 @@ import random
 import statistics as stats
 
 import ortografix
-from ortografix import Attention, Encoder, Dataset
+from ortografix import Encoder, Dataset, Decoder
 
 if __name__ == '__main__':
     NUM_XP = 5
@@ -25,7 +25,7 @@ if __name__ == '__main__':
     LEARNING_RATE = 0.01
     EPOCHS = 5
     TEACHER_FORCING_RATIO = 0.5
-    WITH_ATTENTION = True
+    WITH_ATTENTION = False
     PRINT_EVERY = 1000
     MIN_COUNT = 2
     nsims = []
@@ -54,13 +54,12 @@ if __name__ == '__main__':
                           nonlinearity=NON_LINEARITY,
                           bias=BIAS, dropout=DROPOUT,
                           bidirectional=BIDIRECTIONAL).to(ortografix.DEVICE)
-        decoder = Attention(hidden_size=HIDDEN_SIZE,
-                            output_size=dataset.right_vocab.size,
-                            max_seq_len=dataset.max_seq_len,
-                            num_layers=NUM_LAYERS,
-                            nonlinearity=NON_LINEARITY,
-                            bias=BIAS, dropout=DROPOUT,
-                            bidirectional=BIDIRECTIONAL).to(ortografix.DEVICE)
+        decoder = Decoder(model_type=MODEL_TYPE,
+                          hidden_size=HIDDEN_SIZE,
+                          output_size=dataset.right_vocab.size,
+                          num_layers=NUM_LAYERS,
+                          nonlinearity=NON_LINEARITY,
+                          bias=BIAS, dropout=DROPOUT).to(ortografix.DEVICE)
         ortografix.train(encoder, decoder, dataset.indexed_pairs,
                          dataset.max_seq_len, EPOCHS, LEARNING_RATE,
                          PRINT_EVERY, TEACHER_FORCING_RATIO)

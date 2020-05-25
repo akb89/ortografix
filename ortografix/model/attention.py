@@ -22,6 +22,7 @@ class Attention(torch.nn.Module):
         self.nonlinearity = nonlinearity
         self.bias = bias
         self.dropout = dropout
+        self.with_attention = True
         self.embedding = torch.nn.Embedding(self.output_size, self.hidden_size)
         self.attn = torch.nn.Linear(self.hidden_size * 2, self.max_seq_len)
         if bidirectional:

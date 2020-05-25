@@ -40,7 +40,7 @@ __all__ = ('train', 'evaluate')
 
 
 def save_dataset_and_models(output_dirpath, dataset, encoder, decoder, loss,
-                            learning_rate, with_attention):
+                            learning_rate):
     """Dump pytorch model and Dataset parameters."""
     logger.info('Saving dataset and models...')
     dataset.save_params(output_dirpath)
@@ -89,9 +89,9 @@ def save_dataset_and_models(output_dirpath, dataset, encoder, decoder, loss,
                         'num_layers': decoder.num_layers,
                         'nonlinearity': decoder.nonlinearity,
                         'bias': decoder.bias,
-                        'dropout': decoder.dropout
+                        'dropout': decoder.dropout,
+                        'with_attention': decoder.with_attention
                     },
-                    'with_attention': with_attention,
                     'loss': loss,
                     'learning_rate': learning_rate},
                    os.path.join(output_dirpath, 'checkpoint.tar'))
@@ -99,7 +99,7 @@ def save_dataset_and_models(output_dirpath, dataset, encoder, decoder, loss,
 
 # pylint: disable=R0914,E1102
 def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
-                        with_attention, encoder_optimizer, decoder_optimizer,
+                        encoder_optimizer, decoder_optimizer,
                         max_seq_len, criterion, teacher_forcing_ratio,
                         last_decoder_pred_idx):
     if encoder.model_type != 'transformer':
@@ -121,7 +121,6 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
         if encoder.model_type == 'transformer':
             encoder_output = encoder(source_tensor[eidx])
         else:
-
             encoder_output, encoder_hidden = encoder(source_tensor[eidx],
                                                      encoder_hidden)
         encoder_outputs[eidx] = encoder_output[0, 0]
@@ -136,7 +135,7 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
         for didx in range(target_length):
             if decoder.model_type == 'transformer':
                 decoder_output = decoder(decoder_input, encoder_outputs)
-            elif with_attention:
+            elif decoder.with_attention:
                 decoder_output, decoder_hidden, _ = decoder(
                     decoder_input, decoder_hidden, encoder_outputs)
             else:
@@ -149,7 +148,7 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
         for didx in range(target_length):
             if decoder.model_type == 'transformer':
                 decoder_output = decoder(decoder_input, encoder_outputs)
-            elif with_attention:
+            elif decoder.with_attention:
                 decoder_output, decoder_hidden, _ = decoder(
                     decoder_input, decoder_hidden, encoder_outputs)
             else:
@@ -167,8 +166,8 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
     return loss.item() / target_length, decoder_input.item()
 
 
-def _train(encoder, decoder, indexed_pairs, max_seq_len, with_attention,
-           num_epochs, learning_rate, print_every, teacher_forcing_ratio):
+def _train(encoder, decoder, indexed_pairs, max_seq_len, num_epochs,
+           learning_rate, print_every, teacher_forcing_ratio):
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
     criterion = torch.nn.NLLLoss()
@@ -196,7 +195,7 @@ def _train(encoder, decoder, indexed_pairs, max_seq_len, with_attention,
                 num_iter += 1
                 loss, last_decoder_pred_idx = _train_single_batch(
                     source_tensor, target_tensor, encoder, decoder,
-                    with_attention, encoder_optimizer, decoder_optimizer,
+                    encoder_optimizer, decoder_optimizer,
                     max_seq_len, criterion, teacher_forcing_ratio,
                     last_decoder_pred_idx)
                 print_loss_total += loss
@@ -256,7 +255,7 @@ def train(args):
                            output_size=dec_input_size,
                            num_layers=args.num_layers,
                            dropout=args.dropout,
-                           num_attention_heads=2).to(const.DEVICE)
+                           num_attention_heads=args.num_attention_heads).to(const.DEVICE)
     elif args.with_attention:
         decoder = Attention(hidden_size=args.hidden_size,
                             output_size=dec_input_size,
@@ -275,15 +274,18 @@ def train(args):
                           dropout=args.dropout).to(const.DEVICE)
     encoder, decoder, loss = _train(
         encoder, decoder, indexed_pairs, dataset.max_seq_len,
-        args.with_attention, args.epochs, args.learning_rate, args.print_every,
+        args.epochs, args.learning_rate, args.print_every,
         args.teacher_forcing_ratio)
     if args.output_dirpath:
         save_dataset_and_models(args.output_dirpath, dataset, encoder, decoder,
-                                loss, args.learning_rate, args.with_attention)
+                                loss, args.learning_rate)
 
 
-def _decode(source_indexes, encoder, decoder, with_attention, max_seq_len):
+def _decode(source_indexes, encoder, decoder, max_seq_len):
     with torch.no_grad():
+        if encoder.model_type != 'transformer':
+            encoder_hidden = encoder.init_hidden()
+            decoder_hidden = decoder.init_hidden()
         last_decoder_pred_idx = const.SOS_IDX
         decoded_indexes = []
         for idx in range(0, len(source_indexes), max_seq_len):
@@ -294,24 +296,30 @@ def _decode(source_indexes, encoder, decoder, with_attention, max_seq_len):
             input_tensor = torch.tensor(source, dtype=torch.long,
                                         device=const.DEVICE).view(-1, 1)
             input_length = input_tensor.size()[0]
-            encoder_hidden = encoder.init_hidden()
-            if encoder.bidirectional:
+            if encoder.model_type == 'transformer' or not encoder.bidirectional:
+                encoder_outputs = torch.zeros(max_seq_len, encoder.hidden_size,
+                                              device=const.DEVICE)
+            else:
                 encoder_outputs = torch.zeros(max_seq_len,
                                               encoder.hidden_size*2,
                                               device=const.DEVICE)
-            else:
-                encoder_outputs = torch.zeros(max_seq_len, encoder.hidden_size,
-                                              device=const.DEVICE)
             for eidx in range(input_length):
-                encoder_output, encoder_hidden = encoder(
-                    input_tensor[eidx], encoder_hidden)
+                if encoder.model_type == 'transformer':
+                    encoder_output = encoder(input_tensor[eidx])
+                else:
+                    encoder_output, encoder_hidden = encoder(input_tensor[eidx],
+                                                             encoder_hidden)
                 encoder_outputs[eidx] += encoder_output[0, 0]
             decoder_input = torch.tensor([[last_decoder_pred_idx]],
                                          device=const.DEVICE)
-            decoder_hidden = encoder_hidden
+            if decoder.model_type != 'transformer':
+                if not encoder.bidirectional:
+                    decoder_hidden = encoder_hidden
             decoder_attentions = torch.zeros(max_seq_len, max_seq_len)
             for didx in range(max_seq_len):
-                if with_attention:
+                if decoder.model_type == 'transformer':
+                    decoder_output = decoder(decoder_input, encoder_outputs)
+                elif decoder.with_attention:
                     decoder_output, decoder_hidden, decoder_attention = decoder(
                         decoder_input, decoder_hidden, encoder_outputs)
                     decoder_attentions[didx] = decoder_attention.data
@@ -328,7 +336,7 @@ def _decode(source_indexes, encoder, decoder, with_attention, max_seq_len):
         return decoded_indexes, decoder_attentions[:didx + 1]
 
 
-def decode(sequence, itemize, encoder, decoder, with_attention, max_seq_len):
+def decode(sequence, itemize, encoder, decoder, max_seq_len):
     predicted_idxx = []
     if itemize:
         key = lambda sep: sep == const.SEP_IDX
@@ -339,28 +347,24 @@ def decode(sequence, itemize, encoder, decoder, with_attention, max_seq_len):
                 chars.insert(0, const.SOS_IDX)
             if chars[-1] != const.EOS_IDX:
                 chars.append(const.EOS_IDX)
-            predicted_idx, _ = _decode(chars, encoder, decoder, with_attention,
-                                       max_seq_len)
+            predicted_idx, _ = _decode(chars, encoder, decoder, max_seq_len)
             predicted_idxx.extend(predicted_idx)
             predicted_idxx.append(const.SEP_IDX)
         predicted_idxx.pop()
 
     else:
-        predicted_idxx, _ = _decode(sequence, encoder, decoder,with_attention,
-                                    max_seq_len)
+        predicted_idxx, _ = _decode(sequence, encoder, decoder, max_seq_len)
     return predicted_idxx
 
 
-def _evaluate(indexed_pairs, itemize, encoder, decoder, idx2char,
-              with_attention, max_seq_len):
+def _evaluate(indexed_pairs, itemize, encoder, decoder, idx2char, max_seq_len):
     avg_dist = []
     avg_dl = []
     # avg_norm_dist = []
     nsim = []
     dl_nsim = []
     for seq in indexed_pairs:
-        pred_idx = decode(seq[0], itemize, encoder, decoder, with_attention,
-                          max_seq_len)
+        pred_idx = decode(seq[0], itemize, encoder, decoder, max_seq_len)
         gold = ' '.join(''.join(
             [idx2char[idx] for idx in seq[1] if idx not in
              [const.SOS_IDX, const.EOS_IDX]]).split(const.SEP))
@@ -411,23 +415,36 @@ def evaluate(args):
     else:
         logger.info('Loading a CPU-trained model on CPU')
         checkpoint = torch.load(checkpoint_filepath)
-    encoder = Encoder(model_type=checkpoint['encoder']['model_type'],
-                      input_size=checkpoint['encoder']['input_size'],
-                      hidden_size=checkpoint['encoder']['hidden_size'],
-                      num_layers=checkpoint['encoder']['num_layers'],
-                      nonlinearity=checkpoint['encoder']['nonlinearity'],
-                      bias=checkpoint['encoder']['bias'],
-                      dropout=checkpoint['encoder']['dropout'],
-                      bidirectional=checkpoint['encoder']['bidirectional'])
-    if checkpoint['with_attention']:
-        decoder = Attention(model_type=checkpoint['decoder']['model_type'],
-                            hidden_size=checkpoint['decoder']['hidden_size'],
+    if checkpoint['encoder']['model_type'] == 'transformer':
+        encoder = TEncoder(input_size=checkpoint['encoder']['input_size'],
+                           hidden_size=checkpoint['encoder']['hidden_size'],
+                           num_layers=checkpoint['encoder']['num_layers'],
+                           dropout=checkpoint['encoder']['dropout'],
+                           num_attention_heads=checkpoint['encoder']['num_attention_heads'])
+    else:
+        encoder = Encoder(model_type=checkpoint['encoder']['model_type'],
+                          input_size=checkpoint['encoder']['input_size'],
+                          hidden_size=checkpoint['encoder']['hidden_size'],
+                          num_layers=checkpoint['encoder']['num_layers'],
+                          nonlinearity=checkpoint['encoder']['nonlinearity'],
+                          bias=checkpoint['encoder']['bias'],
+                          dropout=checkpoint['encoder']['dropout'],
+                          bidirectional=checkpoint['encoder']['bidirectional'])
+    if checkpoint['decoder']['model_type'] == 'transformer':
+        decoder = TDecoder(hidden_size=checkpoint['decoder']['hidden_size'],
+                           output_size=checkpoint['decoder']['output_size'],
+                           num_layers=checkpoint['decoder']['num_layers'],
+                           dropout=checkpoint['decoder']['dropout'],
+                           num_attention_heads=checkpoint['decoder']['num_attention_heads'])
+    elif checkpoint['with_attention']:
+        decoder = Attention(hidden_size=checkpoint['decoder']['hidden_size'],
                             output_size=checkpoint['decoder']['output_size'],
                             max_seq_len=dataset_params['max_seq_len'],
                             num_layers=checkpoint['decoder']['num_layers'],
                             nonlinearity=checkpoint['decoder']['nonlinearity'],
                             bias=checkpoint['decoder']['bias'],
-                            dropout=checkpoint['decoder']['dropout'])
+                            dropout=checkpoint['decoder']['dropout'],
+                            bidirectional=checkpoint['encoder']['bidirectional'])
     else:
         decoder = Decoder(model_type=checkpoint['decoder']['model_type'],
                           hidden_size=checkpoint['decoder']['hidden_size'],
@@ -462,7 +479,6 @@ def evaluate(args):
                          not in [const.SOS_IDX, const.EOS_IDX]])
                 .split(const.SEP))
             predicted_idxx = decode(seq[0], args.itemize, encoder, decoder,
-                                    checkpoint['with_attention'],
                                     dataset_params['max_seq_len'])
             pred_str = ' '.join(
                 ''.join([right_vocab.idx2char[idx] for idx in predicted_idxx
@@ -473,8 +489,7 @@ def evaluate(args):
             print('<', pred_str)
     else:
         _evaluate(indexed_pairs, args.itemize, encoder, decoder,
-                  right_vocab.idx2char, checkpoint['with_attention'],
-                  dataset_params['max_seq_len'])
+                  right_vocab.idx2char, dataset_params['max_seq_len'])
 
 
 def convert(args):

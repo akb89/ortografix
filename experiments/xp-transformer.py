@@ -4,7 +4,7 @@ import random
 import statistics as stats
 
 import ortografix
-from ortografix import Attention, Encoder, Dataset, Decoder
+from ortografix import Dataset, TEncoder, TDecoder
 
 if __name__ == '__main__':
     NUM_XP = 5
@@ -15,17 +15,15 @@ if __name__ == '__main__':
     ITEMIZE = False
     MAX_SEQ_LEN = 0
     REVERSE = False
-    MODEL_TYPE = 'gru'
-    HIDDEN_SIZE = 256
+    MODEL_TYPE = 'transformer'
+    HIDDEN_SIZE = 128
     NUM_LAYERS = 1
-    NON_LINEARITY = 'relu'
-    BIAS = True
+    NUM_ATTENTION_HEADS = 1
     DROPOUT = 0
-    BIDIRECTIONAL = True
     LEARNING_RATE = 0.01
     EPOCHS = 5
     TEACHER_FORCING_RATIO = 0.5
-    WITH_ATTENTION = True
+    WITH_ATTENTION = False  # irrelevant for transformers
     PRINT_EVERY = 100
     MIN_COUNT = 2
     nsims = []
@@ -47,35 +45,22 @@ if __name__ == '__main__':
         dataset = Dataset(train_pairs, SHUFFLE, MAX_SEQ_LEN, REVERSE, MIN_COUNT)
         test_indexed_pairs = ortografix.index_pairs(
             test_pairs, dataset.left_vocab.char2idx, dataset.right_vocab.char2idx)
-        encoder = Encoder(model_type=MODEL_TYPE,
-                          input_size=dataset.left_vocab.size,
-                          hidden_size=HIDDEN_SIZE,
-                          num_layers=NUM_LAYERS,
-                          nonlinearity=NON_LINEARITY,
-                          bias=BIAS, dropout=DROPOUT,
-                          bidirectional=BIDIRECTIONAL).to(ortografix.DEVICE)
-        if WITH_ATTENTION:
-            decoder = Attention(model_type=MODEL_TYPE,
-                                hidden_size=HIDDEN_SIZE,
-                                output_size=dataset.right_vocab.size,
-                                max_seq_len=dataset.max_seq_len,
-                                num_layers=NUM_LAYERS,
-                                nonlinearity=NON_LINEARITY,
-                                bias=BIAS, dropout=DROPOUT,
-                                bidirectional=BIDIRECTIONAL).to(ortografix.DEVICE)
-        else:
-            decoder = Decoder(model_type=MODEL_TYPE,
-                              hidden_size=HIDDEN_SIZE,
-                              output_size=dataset.right_vocab.size,
-                              num_layers=NUM_LAYERS,
-                              nonlinearity=NON_LINEARITY,
-                              bias=BIAS, dropout=DROPOUT).to(ortografix.DEVICE)
+        encoder = TEncoder(input_size=dataset.left_vocab.size,
+                           hidden_size=HIDDEN_SIZE,
+                           num_layers=NUM_LAYERS,
+                           dropout=DROPOUT,
+                           num_attention_heads=NUM_ATTENTION_HEADS).to(ortografix.DEVICE)
+        decoder = TDecoder(hidden_size=HIDDEN_SIZE,
+                           output_size=dataset.right_vocab.size,
+                           num_layers=NUM_LAYERS,
+                           dropout=DROPOUT,
+                           num_attention_heads=NUM_ATTENTION_HEADS).to(ortografix.DEVICE)
         ortografix.train(encoder, decoder, dataset.indexed_pairs,
-                         dataset.max_seq_len, WITH_ATTENTION, EPOCHS,
-                         LEARNING_RATE, PRINT_EVERY, TEACHER_FORCING_RATIO)
+                         dataset.max_seq_len, EPOCHS, LEARNING_RATE,
+                         PRINT_EVERY, TEACHER_FORCING_RATIO)
         _, nsim, dl_nsim = ortografix.evaluate(
             test_indexed_pairs, ITEMIZE, encoder, decoder,
-            dataset.right_vocab.idx2char, WITH_ATTENTION, dataset.max_seq_len)
+            dataset.right_vocab.idx2char, dataset.max_seq_len)
         nsims.append(nsim)
         dl_nsims.append(dl_nsim)
     print('avg nsim = {}'.format(stats.mean(nsims)))
