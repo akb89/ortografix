@@ -11,8 +11,7 @@ class Attention(torch.nn.Module):
     """Attention class."""
 
     def __init__(self, model_type, hidden_size, output_size, max_seq_len,
-                 num_layers=1, nonlinearity='relu', bias=True, dropout=0,
-                 bidirectional=False):
+                 num_layers=1, nonlinearity='relu', bias=True, dropout=0):
         """Initialize attention model."""
         super(Attention, self).__init__()
         self.model_type = model_type
@@ -23,7 +22,6 @@ class Attention(torch.nn.Module):
         self.nonlinearity = nonlinearity
         self.bias = bias
         self.dropout = dropout
-        self.bidirectional = bidirectional
         self.embedding = torch.nn.Embedding(self.output_size, self.hidden_size)
         self.attn = torch.nn.Linear(self.hidden_size * 2, self.max_seq_len)
         if self.bidirectional:
@@ -37,21 +35,18 @@ class Attention(torch.nn.Module):
                 input_size=hidden_size, hidden_size=hidden_size,
                 num_layers=num_layers, nonlinearity=nonlinearity,
                 bias=bias, batch_first=False, dropout=dropout,
-                bidirectional=bidirectional)
+                bidirectional=False)
         if self.model_type == 'gru':
             self.gru = torch.nn.GRU(
                 input_size=hidden_size, hidden_size=hidden_size,
                 num_layers=num_layers, bias=bias, batch_first=False,
-                dropout=dropout, bidirectional=bidirectional)
+                dropout=dropout, bidirectional=False)
         if self.model_type == 'lstm':
             self.lstm = torch.nn.LSTM(
                 input_size=hidden_size, hidden_size=hidden_size,
                 num_layers=num_layers, bias=bias, batch_first=False,
-                dropout=dropout, bidirectional=bidirectional)
-        if self.bidirectional:
-            self.out = torch.nn.Linear(self.hidden_size*2, self.output_size)
-        else:
-            self.out = torch.nn.Linear(self.hidden_size, self.output_size)
+                dropout=dropout, bidirectional=False)
+        self.out = torch.nn.Linear(self.hidden_size, self.output_size)
 
     # pylint: disable=R1710, W0221
     def forward(self, input_tensor, hidden, encoder_outputs):
