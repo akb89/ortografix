@@ -15,7 +15,7 @@ if __name__ == '__main__':
     ITEMIZE = False
     MAX_SEQ_LEN = 0
     REVERSE = False
-    MODEL_TYPE = 'gru'
+    MODEL_TYPE = 'lstm'
     HIDDEN_SIZE = 256
     NUM_LAYERS = 1
     NON_LINEARITY = 'relu'

@@ -67,5 +67,10 @@ class Decoder(torch.nn.Module):
 
     def init_hidden(self):
         """Initialize hidden layers."""
+        if self.model_type == 'lstm':
+            return (torch.zeros(self.num_layers, 1, self.hidden_size,
+                                device=const.DEVICE),
+                    torch.zeros(self.num_layers, 1, self.hidden_size,
+                                device=const.DEVICE))
         return torch.zeros(self.num_layers, 1, self.hidden_size,
                            device=const.DEVICE)
