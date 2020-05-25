@@ -11,7 +11,8 @@ class Attention(torch.nn.Module):
     """Attention class."""
 
     def __init__(self, model_type, hidden_size, output_size, max_seq_len,
-                 num_layers=1, nonlinearity='relu', bias=True, dropout=0):
+                 num_layers=1, nonlinearity='relu', bias=True, dropout=0,
+                 bidirectional=False):
         """Initialize attention model."""
         super(Attention, self).__init__()
         self.model_type = model_type
@@ -24,7 +25,7 @@ class Attention(torch.nn.Module):
         self.dropout = dropout
         self.embedding = torch.nn.Embedding(self.output_size, self.hidden_size)
         self.attn = torch.nn.Linear(self.hidden_size * 2, self.max_seq_len)
-        if self.bidirectional:
+        if bidirectional:
             self.attn_combine = torch.nn.Linear(self.hidden_size * 3,
                                                 self.hidden_size)
         else:

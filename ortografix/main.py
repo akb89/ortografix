@@ -26,6 +26,7 @@ from ortografix.model.attention import Attention
 from ortografix.model.encoder import Encoder
 from ortografix.model.decoder import Decoder
 from ortografix.model.dataset import Dataset, Vocab
+from ortografix.model.transformer import TEncoder, TDecoder
 
 
 logging.config.dictConfig(
@@ -46,32 +47,54 @@ def save_dataset_and_models(output_dirpath, dataset, encoder, decoder, loss,
     model_params_filepath = os.path.join(output_dirpath, 'model.params')
     with open(model_params_filepath, 'w', encoding='utf-8') as m_params_str:
         print('cuda\t{}'.format(torch.cuda.is_available()), file=m_params_str)
-    torch.save({'encoder_state_dict': encoder.state_dict(),
-                'decoder_state_dict': decoder.state_dict(),
-                'encoder': {
-                    'model_type': encoder.model_type,
-                    'input_size': encoder.input_size,
-                    'hidden_size': encoder.hidden_size,
-                    'num_layers': encoder.num_layers,
-                    'nonlinearity': encoder.nonlinearity,
-                    'bias': encoder.bias,
-                    'dropout': encoder.dropout,
-                    'bidirectional': encoder.bidirectional
-                },
-                'decoder': {
-                    'model_type': decoder.model_type,
-                    'output_size': decoder.output_size,
-                    'hidden_size': decoder.hidden_size,
-                    'num_layers': decoder.num_layers,
-                    'nonlinearity': decoder.nonlinearity,
-                    'bias': decoder.bias,
-                    'dropout': decoder.dropout,
-                    'bidirectional': decoder.bidirectional
-                },
-                'with_attention': with_attention,
-                'loss': loss,
-                'learning_rate': learning_rate},
-               os.path.join(output_dirpath, 'checkpoint.tar'))
+    if encoder.model_type == 'transformer':
+        torch.save({'encoder_state_dict': encoder.state_dict(),
+                    'decoder_state_dict': decoder.state_dict(),
+                    'encoder': {
+                        'model_type': encoder.model_type,
+                        'input_size': encoder.input_size,
+                        'hidden_size': encoder.hidden_size,
+                        'num_layers': encoder.num_layers,
+                        'dropout': encoder.dropout,
+                        'num_attention_heads': encoder.num_attention_heads
+                    },
+                    'decoder': {
+                        'model_type': decoder.model_type,
+                        'output_size': decoder.output_size,
+                        'hidden_size': decoder.hidden_size,
+                        'num_layers': decoder.num_layers,
+                        'dropout': decoder.dropout,
+                        'num_attention_heads': encoder.num_attention_heads
+                    },
+                    'loss': loss,
+                    'learning_rate': learning_rate},
+                   os.path.join(output_dirpath, 'checkpoint.tar'))
+    else:
+        torch.save({'encoder_state_dict': encoder.state_dict(),
+                    'decoder_state_dict': decoder.state_dict(),
+                    'encoder': {
+                        'model_type': encoder.model_type,
+                        'input_size': encoder.input_size,
+                        'hidden_size': encoder.hidden_size,
+                        'num_layers': encoder.num_layers,
+                        'nonlinearity': encoder.nonlinearity,
+                        'bias': encoder.bias,
+                        'dropout': encoder.dropout,
+                        'bidirectional': encoder.bidirectional
+                    },
+                    'decoder': {
+                        'model_type': decoder.model_type,
+                        'output_size': decoder.output_size,
+                        'hidden_size': decoder.hidden_size,
+                        'num_layers': decoder.num_layers,
+                        'nonlinearity': decoder.nonlinearity,
+                        'bias': decoder.bias,
+                        'dropout': decoder.dropout
+                    },
+                    'with_attention': with_attention,
+                    'loss': loss,
+                    'learning_rate': learning_rate},
+                   os.path.join(output_dirpath, 'checkpoint.tar'))
 
 
 # pylint: disable=R0914,E1102
@@ -79,30 +102,41 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
                         with_attention, encoder_optimizer, decoder_optimizer,
                         max_seq_len, criterion, teacher_forcing_ratio,
                         last_decoder_pred_idx):
-    encoder_hidden = encoder.init_hidden()
+    if encoder.model_type != 'transformer':
+        encoder_hidden = encoder.init_hidden()
+        decoder_hidden = decoder.init_hidden()
     encoder_optimizer.zero_grad()
     decoder_optimizer.zero_grad()
     input_length = source_tensor.size(0)
     target_length = target_tensor.size(0)
-    if encoder.bidirectional:
-        encoder_outputs = torch.zeros(max_seq_len, encoder.hidden_size*2,
-                                      device=const.DEVICE)
-    else:
+    if encoder.model_type == 'transformer' or not encoder.bidirectional:
         encoder_outputs = torch.zeros(max_seq_len, encoder.hidden_size,
                                       device=const.DEVICE)
+    else:
+        encoder_outputs = torch.zeros(max_seq_len, encoder.hidden_size*2,
+                                      device=const.DEVICE)
+
     loss = 0
     for eidx in range(input_length):
-        encoder_output, encoder_hidden = encoder(source_tensor[eidx],
-                                                 encoder_hidden)
+        if encoder.model_type == 'transformer':
+            encoder_output = encoder(source_tensor[eidx])
+        else:
+
+            encoder_output, encoder_hidden = encoder(source_tensor[eidx],
+                                                     encoder_hidden)
         encoder_outputs[eidx] = encoder_output[0, 0]
     decoder_input = torch.tensor([[last_decoder_pred_idx]],
                                  device=const.DEVICE)
-    decoder_hidden = encoder_hidden
+    if decoder.model_type != 'transformer':
+        if not encoder.bidirectional:
+            decoder_hidden = encoder_hidden
     use_teacher_forcing = random.random() < teacher_forcing_ratio
     if use_teacher_forcing:
         # Teacher forcing: Feed the target as the next input
         for didx in range(target_length):
-            if with_attention:
+            if decoder.model_type == 'transformer':
+                decoder_output = decoder(decoder_input, encoder_outputs)
+            elif with_attention:
                 decoder_output, decoder_hidden, _ = decoder(
                     decoder_input, decoder_hidden, encoder_outputs)
             else:
@@ -113,7 +147,9 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
     else:
         # Without teacher forcing: use its own predictions as the next input
         for didx in range(target_length):
-            if with_attention:
+            if decoder.model_type == 'transformer':
+                decoder_output = decoder(decoder_input, encoder_outputs)
+            elif with_attention:
                 decoder_output, decoder_hidden, _ = decoder(
                     decoder_input, decoder_hidden, encoder_outputs)
             else:
@@ -201,30 +237,43 @@ def train(args):
         indexed_pairs = dataset.indexed_pairs
         enc_input_size = dataset.left_vocab.size
         dec_input_size = dataset.right_vocab.size
-    encoder = Encoder(model_type=args.model_type,
-                      input_size=enc_input_size,
-                      hidden_size=args.hidden_size,
-                      num_layers=args.num_layers,
-                      nonlinearity=args.nonlinearity,
-                      bias=args.bias, dropout=args.dropout,
-                      bidirectional=args.bidirectional).to(const.DEVICE)
-    if args.with_attention:
+    if args.model_type == 'transformer':
+        encoder = TEncoder(input_size=enc_input_size,
+                           hidden_size=args.hidden_size,
+                           num_layers=args.num_layers,
+                           dropout=args.dropout,
+                           num_attention_heads=args.num_attention_heads).to(const.DEVICE)
+    else:
+        encoder = Encoder(model_type=args.model_type,
+                          input_size=enc_input_size,
+                          hidden_size=args.hidden_size,
+                          num_layers=args.num_layers,
+                          nonlinearity=args.nonlinearity,
+                          bias=args.bias, dropout=args.dropout,
+                          bidirectional=args.bidirectional).to(const.DEVICE)
+    if args.model_type == 'transformer':
+        decoder = TDecoder(hidden_size=args.hidden_size,
+                           output_size=dec_input_size,
+                           num_layers=args.num_layers,
+                           dropout=args.dropout,
+                           num_attention_heads=2)
+    elif args.with_attention:
         decoder = Attention(model_type=args.model_type,
                             hidden_size=args.hidden_size,
                             output_size=dec_input_size,
                             max_seq_len=dataset.max_seq_len,
                             num_layers=args.num_layers,
                             nonlinearity=args.nonlinearity,
-                            bias=args.bias, dropout=args.dropout,
-                            bidirectional=args.bidirectional).to(const.DEVICE)
+                            bias=args.bias,
+                            dropout=args.dropout).to(const.DEVICE)
     else:
         decoder = Decoder(model_type=args.model_type,
                           hidden_size=args.hidden_size,
                           output_size=dec_input_size,
                           num_layers=args.num_layers,
                           nonlinearity=args.nonlinearity,
-                          bias=args.bias, dropout=args.dropout,
-                          bidirectional=args.bidirectional).to(const.DEVICE)
+                          bias=args.bias,
+                          dropout=args.dropout).to(const.DEVICE)
     encoder, decoder, loss = _train(
         encoder, decoder, indexed_pairs, dataset.max_seq_len,
         args.with_attention, args.epochs, args.learning_rate, args.print_every,
@@ -379,8 +428,7 @@ def evaluate(args):
                             num_layers=checkpoint['decoder']['num_layers'],
                             nonlinearity=checkpoint['decoder']['nonlinearity'],
                             bias=checkpoint['decoder']['bias'],
-                            dropout=checkpoint['decoder']['dropout'],
-                            bidirectional=checkpoint['decoder']['bidirectional'])
+                            dropout=checkpoint['decoder']['dropout'])
     else:
         decoder = Decoder(model_type=checkpoint['decoder']['model_type'],
                           hidden_size=checkpoint['decoder']['hidden_size'],
@@ -388,8 +436,7 @@ def evaluate(args):
                           num_layers=checkpoint['decoder']['num_layers'],
                           nonlinearity=checkpoint['decoder']['nonlinearity'],
                           bias=checkpoint['decoder']['bias'],
-                          dropout=checkpoint['decoder']['dropout'],
-                          bidirectional=checkpoint['decoder']['bidirectional'])
+                          dropout=checkpoint['decoder']['dropout'])
     encoder.load_state_dict(checkpoint['encoder_state_dict'])
     decoder.load_state_dict(checkpoint['decoder_state_dict'])
     if torch.cuda.is_available():
@@ -497,7 +544,7 @@ def main():
     parser_train.add_argument('-d', '--data', required=True,
                               help='absolute path to training data')
     parser_train.add_argument('-t', '--model-type',
-                              choices=['rnn', 'gru', 'lstm'],
+                              choices=['rnn', 'gru', 'lstm', 'transformer'],
                               default='gru',
                               help='encoder/decoder model type')
     parser_train.add_argument('-s', '--shuffle', action='store_true',
@@ -538,6 +585,10 @@ def main():
                               help='if set, will use attention-based decoding')
     parser_train.add_argument('-v', '--reverse', action='store_true',
                               help='if set, will reverse dataset pairs')
+    parser_train.add_argument('-y', '--num-attention-heads', type=int,
+                              default=2,
+                              help='number of attention heads in the '
+                                   'Transformer model')
     parser_evaluate = subparsers.add_parser(
         'evaluate', formatter_class=argparse.RawTextHelpFormatter,
         help='evaluate model on input test set')
