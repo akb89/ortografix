@@ -24,7 +24,7 @@ if __name__ == '__main__':
     EPOCHS = 5
     TEACHER_FORCING_RATIO = 0.5
     WITH_ATTENTION = False  # irrelevant for transformers
-    PRINT_EVERY = 100
+    PRINT_EVERY = 1000
     MIN_COUNT = 2
     nsims = []
     dl_nsims = []

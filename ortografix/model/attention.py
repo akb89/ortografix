@@ -15,6 +15,7 @@ class Attention(torch.nn.Module):
                  bidirectional=False):
         """Initialize attention model."""
         super(Attention, self).__init__()
+        self.model_type = 'gru'
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.max_seq_len = max_seq_len
