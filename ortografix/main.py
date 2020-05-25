@@ -104,7 +104,7 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
                         last_decoder_pred_idx):
     if encoder.model_type != 'transformer':
         encoder_hidden = encoder.init_hidden()
-        decoder_hidden = decoder.init_hidden()
+        # decoder_hidden = decoder.init_hidden()
     encoder_optimizer.zero_grad()
     decoder_optimizer.zero_grad()
     input_length = source_tensor.size(0)
@@ -127,7 +127,9 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
     decoder_input = torch.tensor([[last_decoder_pred_idx]],
                                  device=const.DEVICE)
     if decoder.model_type != 'transformer':
-        if not encoder.bidirectional:
+        if encoder.bidirectional:
+            decoder_hidden = encoder_hidden[0].reshape(1, 1, -1)
+        else:
             decoder_hidden = encoder_hidden
     use_teacher_forcing = random.random() < teacher_forcing_ratio
     if use_teacher_forcing:
