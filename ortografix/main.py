@@ -256,10 +256,9 @@ def train(args):
                            output_size=dec_input_size,
                            num_layers=args.num_layers,
                            dropout=args.dropout,
-                           num_attention_heads=2)
+                           num_attention_heads=2).to(const.DEVICE)
     elif args.with_attention:
-        decoder = Attention(model_type=args.model_type,
-                            hidden_size=args.hidden_size,
+        decoder = Attention(hidden_size=args.hidden_size,
                             output_size=dec_input_size,
                             max_seq_len=dataset.max_seq_len,
                             num_layers=args.num_layers,
