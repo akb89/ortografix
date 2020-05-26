@@ -16,7 +16,7 @@ if __name__ == '__main__':
     MAX_SEQ_LEN = 0
     REVERSE = False
     MODEL_TYPE = 'transformer'
-    HIDDEN_SIZE = 128
+    HIDDEN_SIZE = 64
     NUM_LAYERS = 1
     NUM_ATTENTION_HEADS = 1
     DROPOUT = 0

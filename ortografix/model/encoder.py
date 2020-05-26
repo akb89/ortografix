@@ -14,9 +14,8 @@ logger = logging.getLogger(__name__)
 class Encoder(torch.nn.Module):
     """Encoder class."""
 
-    def __init__(self, model_type, input_size, hidden_size, num_layers=1,
-                 nonlinearity='relu', bias=True, dropout=0,
-                 bidirectional=False):
+    def __init__(self, model_type, input_size, hidden_size, num_layers,
+                 nonlinearity, bias, dropout, bidirectional):
         """Initialize encoder model."""
         if model_type not in ['rnn', 'gru', 'lstm']:
             raise Exception(

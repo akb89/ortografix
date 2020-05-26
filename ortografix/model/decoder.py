@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 class Decoder(torch.nn.Module):
     """Decoder class."""
 
-    def __init__(self, model_type, hidden_size, output_size, num_layers=1,
-                 nonlinearity='relu', bias=True, dropout=0):
+    def __init__(self, model_type, hidden_size, output_size, num_layers,
+                 nonlinearity, bias, dropout):
         """Initialize decoder model."""
         if model_type not in ['rnn', 'gru', 'lstm']:
             raise Exception('Unsupported model type: {}'.format(model_type))

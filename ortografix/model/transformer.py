@@ -31,8 +31,8 @@ class PositionalEncoding(torch.nn.Module):
 class TDecoder(torch.nn.Module):
     """Transformer Decoder class."""
 
-    def __init__(self, hidden_size, output_size, num_layers=1, dropout=0,
-                 num_attention_heads=2):
+    def __init__(self, hidden_size, output_size, num_layers, dropout,
+                 num_attention_heads):
         """Initialize decoder model."""
         super(TDecoder, self).__init__()
         self.model_type = 'transformer'
@@ -69,8 +69,8 @@ class TDecoder(torch.nn.Module):
 class TEncoder(torch.nn.Module):
     """Transformer Encoder class."""
 
-    def __init__(self, input_size, hidden_size, num_layers=1, dropout=0,
-                 num_attention_heads=1):
+    def __init__(self, input_size, hidden_size, num_layers, dropout,
+                 num_attention_heads):
         """Initialize encoder model."""
         super(TEncoder, self).__init__()
         self.model_type = 'transformer'

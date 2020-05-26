@@ -128,9 +128,9 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
                                  device=const.DEVICE)
     if decoder.model_type != 'transformer':
         if encoder.bidirectional:
-            # This is not good: it should be the forward hidden state only
+            # here we use summing rather than conctenation to keep same dim in decoder
             # https://discuss.pytorch.org/t/about-bidirectional-gru-with-seq2seq-example-and-some-modifications/15588/5
-            # decoder_hidden = encoder_hidden[0].reshape(1, 1, -1)
+            encoder_outputs = encoder_outputs[:, :encoder.hidden_size] + encoder_outputs[:, encoder.hidden_size:]
             decoder_hidden = encoder_hidden[-decoder.num_layers:]
         else:
             decoder_hidden = encoder_hidden
@@ -285,8 +285,7 @@ def train(args):
                             num_layers=args.num_layers,
                             nonlinearity=args.nonlinearity,
                             bias=args.bias,
-                            dropout=args.dropout,
-                            bidirectional=args.bidirectional).to(const.DEVICE)
+                            dropout=args.dropout).to(const.DEVICE)
     else:
         decoder = Decoder(model_type=args.model_type,
                           hidden_size=args.hidden_size,
@@ -466,8 +465,7 @@ def evaluate(args):
                             num_layers=checkpoint['decoder']['num_layers'],
                             nonlinearity=checkpoint['decoder']['nonlinearity'],
                             bias=checkpoint['decoder']['bias'],
-                            dropout=checkpoint['decoder']['dropout'],
-                            bidirectional=checkpoint['encoder']['bidirectional'])
+                            dropout=checkpoint['decoder']['dropout'])
     else:
         decoder = Decoder(model_type=checkpoint['decoder']['model_type'],
                           hidden_size=checkpoint['decoder']['hidden_size'],

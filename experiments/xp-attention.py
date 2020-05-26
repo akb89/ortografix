@@ -16,7 +16,7 @@ if __name__ == '__main__':
     MAX_SEQ_LEN = 0
     REVERSE = False
     MODEL_TYPE = 'gru'
-    HIDDEN_SIZE = 256
+    HIDDEN_SIZE = 128
     NUM_LAYERS = 1
     NON_LINEARITY = 'relu'
     BIAS = True
@@ -58,8 +58,7 @@ if __name__ == '__main__':
                             max_seq_len=dataset.max_seq_len,
                             num_layers=NUM_LAYERS,
                             nonlinearity=NON_LINEARITY,
-                            bias=BIAS, dropout=DROPOUT,
-                            bidirectional=BIDIRECTIONAL).to(ortografix.DEVICE)
+                            bias=BIAS, dropout=DROPOUT).to(ortografix.DEVICE)
         ortografix.train(encoder, decoder, dataset.indexed_pairs,
                          dataset.max_seq_len, EPOCHS, LEARNING_RATE,
                          PRINT_EVERY, TEACHER_FORCING_RATIO)
