@@ -14,9 +14,8 @@ logger = logging.getLogger(__name__)
 class Decoder(torch.nn.Module):
     """Decoder class."""
 
-    def __init__(self, model_type, hidden_size, output_size, num_layers=1,
-                 nonlinearity='tanh', bias=True, dropout=0,
-                 bidirectional=False):
+    def __init__(self, model_type, hidden_size, output_size, num_layers,
+                 nonlinearity, bias, dropout):
         """Initialize decoder model."""
         if model_type not in ['rnn', 'gru', 'lstm']:
             raise Exception('Unsupported model type: {}'.format(model_type))
@@ -28,28 +27,25 @@ class Decoder(torch.nn.Module):
         self.nonlinearity = nonlinearity
         self.bias = bias
         self.dropout = dropout
-        self.bidirectional = bidirectional
+        self.with_attention = False
         self.embedding = torch.nn.Embedding(output_size, hidden_size)
         if self.model_type == 'rnn':
             self.rnn = torch.nn.RNN(
                 input_size=hidden_size, hidden_size=hidden_size,
                 num_layers=num_layers, nonlinearity=nonlinearity,
                 bias=bias, batch_first=False, dropout=dropout,
-                bidirectional=bidirectional)
+                bidirectional=False)
         if self.model_type == 'gru':
             self.gru = torch.nn.GRU(
                 input_size=hidden_size, hidden_size=hidden_size,
                 num_layers=num_layers, bias=bias, batch_first=False,
-                dropout=dropout, bidirectional=bidirectional)
+                dropout=dropout, bidirectional=False)
         if self.model_type == 'lstm':
             self.lstm = torch.nn.LSTM(
                 input_size=hidden_size, hidden_size=hidden_size,
                 num_layers=num_layers, bias=bias, batch_first=False,
-                dropout=dropout, bidirectional=bidirectional)
-        if bidirectional:
-            self.out = torch.nn.Linear(hidden_size*2, output_size)
-        else:
-            self.out = torch.nn.Linear(hidden_size, output_size)
+                dropout=dropout, bidirectional=False)
+        self.out = torch.nn.Linear(hidden_size, output_size)
         self.softmax = torch.nn.LogSoftmax(dim=1)
 
     # pylint: disable=R1710, W0221
@@ -71,8 +67,10 @@ class Decoder(torch.nn.Module):
 
     def init_hidden(self):
         """Initialize hidden layers."""
-        if self.bidirectional:
-            return torch.zeros(self.num_layers*2, 1, self.hidden_size,
-                               device=const.DEVICE)
+        if self.model_type == 'lstm':
+            return (torch.zeros(self.num_layers, 1, self.hidden_size,
+                                device=const.DEVICE),
+                    torch.zeros(self.num_layers, 1, self.hidden_size,
+                                device=const.DEVICE))
         return torch.zeros(self.num_layers, 1, self.hidden_size,
                            device=const.DEVICE)

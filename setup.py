@@ -16,7 +16,7 @@ setup(
     author_email='akb@3azouz.net',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    version='0.6.0',
+    version='0.7.0',
     url='https://github.com/akb89/ortografix',
     download_url='https://github.com/akb89/ortografix',
     license='MIT',
@@ -31,7 +31,7 @@ setup(
             'ortografix = ortografix.main:main'
         ],
     },
-    install_requires=['pyyaml>=4.2b1', 'torch==1.4.0', 'textdistance==4.2.0'],
+    install_requires=['pyyaml>=4.2b1', 'torch==1.5.0', 'textdistance==4.2.0'],
     classifiers=['Development Status :: 2 - Pre-Alpha',
                  'Environment :: Web Environment',
                  'Intended Audience :: Developers',
