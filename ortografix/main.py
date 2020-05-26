@@ -128,9 +128,13 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
                                  device=const.DEVICE)
     if decoder.model_type != 'transformer':
         if encoder.bidirectional:
-            decoder_hidden = encoder_hidden[0].reshape(1, 1, -1)
+            # This is not good: it should be the forward hidden state only
+            # https://discuss.pytorch.org/t/about-bidirectional-gru-with-seq2seq-example-and-some-modifications/15588/5
+            # decoder_hidden = encoder_hidden[0].reshape(1, 1, -1)
+            decoder_hidden = encoder_hidden[-decoder.num_layers:]
         else:
             decoder_hidden = encoder_hidden
+        # decoder_hidden = encoder_hidden
     use_teacher_forcing = random.random() < teacher_forcing_ratio
     if use_teacher_forcing:
         # Teacher forcing: Feed the target as the next input
