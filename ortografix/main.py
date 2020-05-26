@@ -104,7 +104,6 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
                         last_decoder_pred_idx):
     if encoder.model_type != 'transformer':
         encoder_hidden = encoder.init_hidden()
-        # decoder_hidden = decoder.init_hidden()  # uncomment this and comment line below to obtain best results on bidir attention
     encoder_optimizer.zero_grad()
     decoder_optimizer.zero_grad()
     input_length = source_tensor.size(0)
@@ -128,7 +127,6 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
                                  device=const.DEVICE)
     if decoder.model_type != 'transformer':
         if encoder.bidirectional:
-            # comment below to obtain best results on bidir attention: do not use encoder_hidden and init decoder_hidden at 0
             # here we use summing rather than conctenation to keep same dim in decoder
             # https://discuss.pytorch.org/t/about-bidirectional-gru-with-seq2seq-example-and-some-modifications/15588/5
             encoder_outputs = encoder_outputs[:, :encoder.hidden_size] + encoder_outputs[:, encoder.hidden_size:]
@@ -307,7 +305,6 @@ def _decode(source_indexes, encoder, decoder, max_seq_len):
     with torch.no_grad():
         if encoder.model_type != 'transformer':
             encoder_hidden = encoder.init_hidden()
-            # decoder_hidden = decoder.init_hidden()
         last_decoder_pred_idx = const.SOS_IDX
         decoded_indexes = []
         for idx in range(0, len(source_indexes), max_seq_len):
@@ -336,7 +333,6 @@ def _decode(source_indexes, encoder, decoder, max_seq_len):
                                          device=const.DEVICE)
             if decoder.model_type != 'transformer':
                 if encoder.bidirectional:
-                    # comment below to obtain best results on bidir attention: do not use encoder_hidden and init decoder_hidden at 0
                     # here we use summing rather than conctenation to keep same dim in decoder
                     # https://discuss.pytorch.org/t/about-bidirectional-gru-with-seq2seq-example-and-some-modifications/15588/5
                     encoder_outputs = encoder_outputs[:, :encoder.hidden_size] + encoder_outputs[:, encoder.hidden_size:]
