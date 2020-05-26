@@ -1,8 +1,6 @@
 """Attention Decoder."""
 import torch
 
-import ortografix.utils.constants as const
-
 __all__ = ('Attention')
 
 
@@ -25,12 +23,6 @@ class Attention(torch.nn.Module):
         self.with_attention = True
         self.embedding = torch.nn.Embedding(self.output_size, self.hidden_size)
         self.attn = torch.nn.Linear(self.hidden_size * 2, self.max_seq_len)
-        # if bidirectional:
-        #     self.attn_combine = torch.nn.Linear(self.hidden_size * 3,
-        #                                         self.hidden_size)
-        # else:
-        #     self.attn_combine = torch.nn.Linear(self.hidden_size * 2,
-        #                                         self.hidden_size)
         self.attn_combine = torch.nn.Linear(self.hidden_size * 2,
                                             self.hidden_size)
         self.gru = torch.nn.GRU(
@@ -58,8 +50,3 @@ class Attention(torch.nn.Module):
         output, hidden = self.gru(output, hidden)
         output = self.softmax(self.out(output[0]))
         return output, hidden, attn_weights
-
-    # def init_hidden(self):
-    #     """Initialize hidden layers."""
-    #     return torch.zeros(self.num_layers, 1, self.hidden_size,
-    #                        device=const.DEVICE)
