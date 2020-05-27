@@ -1,0 +1,37 @@
+# build docker image and upload to docker hub
+
+docker build -t ortografix-img .
+
+# install latest docker image on baobab
+
+module purge && module load GCCcore/8.2.0 && module load Singularity/3.4.0-Go-1.12 && PATH=$PATH:/sbin singularity build ortografix:latest.simg docker://akb89/ortografix:latest
+
+# test script 
+
+srun -p debug-EL7 /home/kabbach/ortografix/experiments/transformer.sh
+
+# run script
+
+sbatch --partition=shared-gpu-EL7 --gres=gpu:1 --time=12:00:00 transformer.sh
+
+# script content:
+
+echo "I: full hostname: $(hostname -f)"
+
+module load GCCcore/8.2.0
+module load Singularity/3.4.0-Go-1.12
+
+VERSION_CUDA='10.1.243'
+module load CUDA/${VERSION_CUDA}
+
+# if you need to know the allocated CUDA device, you can obtain it here:
+echo "I: CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
+
+echo "====="
+
+srun singularity \
+    exec \
+    --bind $(readlink /home/kabbach/scratch) \
+    --nv \
+    /home/kabbach/ortografix-img/ortografix:latest.simg \
+        python3 /home/kabbach/experiments/transformer.py

@@ -21,9 +21,9 @@ if __name__ == '__main__':
     NON_LINEARITY = 'relu'
     BIAS = True
     DROPOUT = 0
-    BIDIRECTIONAL = True
+    BIDIRECTIONAL = False
     LEARNING_RATE = 0.01
-    EPOCHS = 5
+    EPOCHS = 1
     TEACHER_FORCING_RATIO = 0.5
     PRINT_EVERY = 1000
     MIN_COUNT = 2

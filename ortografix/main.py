@@ -127,10 +127,21 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
                                  device=const.DEVICE)
     if decoder.model_type != 'transformer':
         if encoder.bidirectional:
-            # here we use summing rather than conctenation to keep same dim in decoder
-            # https://discuss.pytorch.org/t/about-bidirectional-gru-with-seq2seq-example-and-some-modifications/15588/5
-            encoder_outputs = encoder_outputs[:, :encoder.hidden_size] + encoder_outputs[:, encoder.hidden_size:]
-            decoder_hidden = encoder_hidden[-decoder.num_layers:]
+            if decoder.with_attention:
+                # here we use summing rather than conctenation to keep same dim in decoder
+                # https://discuss.pytorch.org/t/about-bidirectional-gru-with-seq2seq-example-and-some-modifications/15588/5
+                encoder_outputs = encoder_outputs[:, :encoder.hidden_size] + encoder_outputs[:, encoder.hidden_size:]
+                if encoder.model_type == 'lstm':
+                    decoder_hidden = encoder_hidden[0][-decoder.num_layers:]
+                else:
+                    decoder_hidden = encoder_hidden[-decoder.num_layers:]
+            elif decoder.model_type == 'lstm':
+                decoder_hidden = (encoder_hidden[0][-decoder.num_layers:],
+                                  encoder_hidden[1][-decoder.num_layers:])
+            else:
+                decoder_hidden = encoder_hidden[-decoder.num_layers:]
+        elif encoder.model_type == 'lstm' and decoder.model_type != 'lstm':
+            decoder_hidden = encoder_hidden[0]
         else:
             decoder_hidden = encoder_hidden
     use_teacher_forcing = random.random() < teacher_forcing_ratio
@@ -176,16 +187,6 @@ def _train_single_batch(source_tensor, target_tensor, encoder, decoder,
 def _train(encoder, decoder, indexed_pairs, max_seq_len, num_epochs,
            learning_rate, print_every, teacher_forcing_ratio):
     criterion = torch.nn.NLLLoss()
-    # if encoder.model_type == 'transformer':
-    #     encoder_optimizer = torch.optim.SGD(encoder.parameters(), lr=5.0)
-    #     encoder_scheduler = torch.optim.lr_scheduler.StepLR(
-    #         encoder_optimizer, 1.0, gamma=0.95)
-    #     decoder_optimizer = torch.optim.SGD(encoder.parameters(), lr=5.0)
-    #     decoder_scheduler = torch.optim.lr_scheduler.StepLR(
-    #         decoder_optimizer, 1.0, gamma=0.95)
-    # else:
-    #     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
-    #     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
     start = time.time()
@@ -333,10 +334,21 @@ def _decode(source_indexes, encoder, decoder, max_seq_len):
                                          device=const.DEVICE)
             if decoder.model_type != 'transformer':
                 if encoder.bidirectional:
-                    # here we use summing rather than conctenation to keep same dim in decoder
-                    # https://discuss.pytorch.org/t/about-bidirectional-gru-with-seq2seq-example-and-some-modifications/15588/5
-                    encoder_outputs = encoder_outputs[:, :encoder.hidden_size] + encoder_outputs[:, encoder.hidden_size:]
-                    decoder_hidden = encoder_hidden[-decoder.num_layers:]
+                    if decoder.with_attention:
+                        # here we use summing rather than conctenation to keep same dim in decoder
+                        # https://discuss.pytorch.org/t/about-bidirectional-gru-with-seq2seq-example-and-some-modifications/15588/5
+                        encoder_outputs = encoder_outputs[:, :encoder.hidden_size] + encoder_outputs[:, encoder.hidden_size:]
+                        if encoder.model_type == 'lstm':
+                            decoder_hidden = encoder_hidden[0][-decoder.num_layers:]
+                        else:
+                            decoder_hidden = encoder_hidden[-decoder.num_layers:]
+                    elif decoder.model_type == 'lstm':
+                        decoder_hidden = (encoder_hidden[0][-decoder.num_layers:],
+                                          encoder_hidden[1][-decoder.num_layers:])
+                    else:
+                        decoder_hidden = encoder_hidden[-decoder.num_layers:]
+                elif encoder.model_type == 'lstm' and decoder.model_type != 'lstm':
+                    decoder_hidden = encoder_hidden[0]
                 else:
                     decoder_hidden = encoder_hidden
             decoder_attentions = torch.zeros(max_seq_len, max_seq_len)
