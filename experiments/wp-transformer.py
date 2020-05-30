@@ -8,21 +8,19 @@ from ortografix import Dataset, TEncoder, TDecoder
 
 if __name__ == '__main__':
     NUM_XP = 5
-    DATA_FILEPATH = '/home/debian/ortografix/data/experts.students.sync.all.as.wordpairs.txt'
-    # DATA_FILEPATH = '/Users/akb/Github/ortografix/data/soundspel/experts.students.sync.all.as.wordpairs.txt'
-    # OUTPUT_DIRPATH = '/Users/akb/Github/ortografix/models/xp001/'
-    SHUFFLE = True
-    ITEMIZE = False
-    MAX_SEQ_LEN = 0
-    REVERSE = False
-    MODEL_TYPE = 'transformer'
+    EPOCHS = 5
     HIDDEN_SIZE = 64
     NUM_LAYERS = 1
     NUM_ATTENTION_HEADS = 1
-    DROPOUT = 0
     LEARNING_RATE = 0.01
-    EPOCHS = 5
     TEACHER_FORCING_RATIO = 0.5
+    DATA_FILEPATH = '/home/kabbach/ortografix/data/experts.students.sync.all.as.wordpairs.txt'
+    SHUFFLE = True
+    ITEMIZE = False
+    REVERSE = False
+    MODEL_TYPE = 'transformer'
+    MAX_SEQ_LEN = 0
+    DROPOUT = 0
     PRINT_EVERY = 1000
     MIN_COUNT = 2
     nsims = []

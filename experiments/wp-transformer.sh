@@ -20,4 +20,4 @@ srun singularity \
     --bind $(readlink /home/kabbach/scratch) \
     --nv \
     /home/kabbach/ortografix:latest.simg \
-        python /home/kabbach/ortografix/experiments/transformer.py
+        python /home/kabbach/ortografix/experiments/wp-transformer.py
