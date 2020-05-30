@@ -12,9 +12,9 @@ import ortografix
 from ortografix import Attention, Encoder, Dataset
 
 if __name__ == '__main__':
-    NUM_XP = 1
-    EPOCHS = 1
-    HIDDEN_SIZE = 64
+    NUM_XP = 5
+    EPOCHS = 10
+    HIDDEN_SIZE = 128
     NUM_LAYERS = 1
     MODEL_TYPE = 'gru'
     BIDIRECTIONAL = True
