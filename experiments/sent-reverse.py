@@ -1,8 +1,8 @@
-"""Train on a biased set of word-pairs. Evaluate on a unique set of wp.
+"""Train and evaluate on sentences. Predict the full sequence at once.
 
 Test set not in train. Decoder WITH attention.
 
-Learn to predict Soundspel -> English.
+Learn to predict Soundpsel -> English.
 """
 
 import random
@@ -15,17 +15,17 @@ if __name__ == '__main__':
     REVERSE = True
     NUM_XP = 5
     EPOCHS = 10
+    MAX_SEQ_LEN = 30
     HIDDEN_SIZE = 128
-    NUM_LAYERS = 1
     MODEL_TYPE = 'gru'
+    NUM_LAYERS = 1
     BIDIRECTIONAL = True
     TEACHER_FORCING_RATIO = 0.5
-    ITEMIZE = False
     LEARNING_RATE = 0.01
-    DATA_FILEPATH = '/home/kabbach/ortografix/data/experts.students.sync.all.as.wordpairs.txt'
-    # DATA_FILEPATH = '/Users/akb/Github/ortografix/data/soundspel/experts.students.sync.all.as.wordpairs.txt'
+    DATA_FILEPATH = '/home/kabbach/ortografix/data/experts.students.sync.sentences.txt'
+    # DATA_FILEPATH = '/Users/akb/Github/ortografix/data/soundspel/experts.students.sync.sentences.txt'
+    ITEMIZE = False
     SHUFFLE = True
-    MAX_SEQ_LEN = 0
     NON_LINEARITY = 'relu'
     BIAS = True
     DROPOUT = 0
