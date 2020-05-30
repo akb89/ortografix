@@ -415,15 +415,15 @@ def _evaluate(indexed_pairs, itemize, encoder, decoder, idx2char, max_seq_len):
         dl_nsim.append(dist.damerau_levenshtein.normalized_similarity(
             gold, prediction))
     logger.info('Printing edit distance info:')
-    logger.info('   total sum dist = {}'.format(sum(avg_dist)))
-    logger.info('   total sum DL = {}'.format(sum(avg_dl)))
-    logger.info('   avg dist = {}'.format(stats.mean(avg_dist)))
-    logger.info('   avg DL = {}'.format(stats.mean(avg_dl)))
+    logger.info('   total dist = {}'.format(sum(avg_dist)))
+    # logger.info('   total sum DL = {}'.format(sum(avg_dl)))
+    logger.info('   avg dist per token = {}'.format(stats.mean(avg_dist)))
+    # logger.info('   avg DL = {}'.format(stats.mean(avg_dl)))
     # logger.info('   avg normalized dist = {}'
     #             .format(stats.mean(avg_norm_dist)))
     logger.info('   avg normalized sim = {}'.format(stats.mean(nsim)))
-    logger.info('   avg normalized DL sim = {}'.format(stats.mean(dl_nsim)))
-    return stats.mean(avg_dist), stats.mean(nsim), stats.mean(dl_nsim)
+    # logger.info('   avg normalized DL sim = {}'.format(stats.mean(dl_nsim)))
+    return sum(avg_dist), stats.mean(avg_dist), stats.mean(nsim), stats.mean(dl_nsim)
 
 
 def evaluate(args):
@@ -472,7 +472,7 @@ def evaluate(args):
                            num_layers=checkpoint['decoder']['num_layers'],
                            dropout=checkpoint['decoder']['dropout'],
                            num_attention_heads=checkpoint['decoder']['num_attention_heads'])
-    elif checkpoint['with_attention']:
+    elif checkpoint['decoder']['with_attention']:
         decoder = Attention(hidden_size=checkpoint['decoder']['hidden_size'],
                             output_size=checkpoint['decoder']['output_size'],
                             max_seq_len=dataset_params['max_seq_len'],
@@ -499,24 +499,29 @@ def evaluate(args):
     indexed_pairs = putils.index_pairs(pairs, left_vocab.char2idx,
                                        right_vocab.char2idx)
     if dataset_params['reverse']:
-        raise Exception('Unsupported reverse option')
+        indexed_pairs = [(y, x) for x, y in indexed_pairs]
+        source_vocab = right_vocab
+        target_vocab = left_vocab
+    else:
+        source_vocab = left_vocab
+        target_vocab = right_vocab
     if args.random > 0:
         random.shuffle(indexed_pairs)
         for seq_num in range(args.random):
             seq = indexed_pairs[seq_num]
             print('-'*80)
             input_str = ' '.join(
-                ''.join([left_vocab.idx2char[idx] for idx in seq[0] if idx
+                ''.join([source_vocab.idx2char[idx] for idx in seq[0] if idx
                          not in [const.SOS_IDX, const.EOS_IDX]])
                 .split(const.SEP))
             gold_str = ' '.join(
-                ''.join([right_vocab.idx2char[idx] for idx in seq[1] if idx
+                ''.join([target_vocab.idx2char[idx] for idx in seq[1] if idx
                          not in [const.SOS_IDX, const.EOS_IDX]])
                 .split(const.SEP))
             predicted_idxx = decode(seq[0], args.itemize, encoder, decoder,
                                     dataset_params['max_seq_len'])
             pred_str = ' '.join(
-                ''.join([right_vocab.idx2char[idx] for idx in predicted_idxx
+                ''.join([target_vocab.idx2char[idx] for idx in predicted_idxx
                          if idx not in [const.SOS_IDX, const.EOS_IDX]])
                 .split(const.SEP))
             print('>', input_str)
@@ -524,7 +529,7 @@ def evaluate(args):
             print('<', pred_str)
     else:
         _evaluate(indexed_pairs, args.itemize, encoder, decoder,
-                  right_vocab.idx2char, dataset_params['max_seq_len'])
+                  target_vocab.idx2char, dataset_params['max_seq_len'])
 
 
 def convert(args):
