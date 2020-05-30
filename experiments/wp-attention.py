@@ -21,8 +21,8 @@ if __name__ == '__main__':
     LEARNING_RATE = 0.01
     TEACHER_FORCING_RATIO = 0.5
     PRINT_EVERY = 1000
-    # DATA_FILEPATH = '/home/kabbach/ortografix/data/experts.students.sync.all.as.wordpairs.txt'
-    DATA_FILEPATH = '/Users/akb/Github/ortografix/data/soundspel/experts.students.sync.all.as.wordpairs.txt'
+    DATA_FILEPATH = '/home/kabbach/ortografix/data/experts.students.sync.all.as.wordpairs.txt'
+    # DATA_FILEPATH = '/Users/akb/Github/ortografix/data/soundspel/experts.students.sync.all.as.wordpairs.txt'
     SHUFFLE = True
     ITEMIZE = False
     MAX_SEQ_LEN = 0
