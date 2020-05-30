@@ -1,4 +1,4 @@
-# build docker image and upload to docker hub
+# build docker image and upload to docker hub (a git push should do this automatically though)
 
 docker build -t ortografix-img .
 
@@ -12,9 +12,32 @@ srun -p debug-EL7 /home/kabbach/ortografix/experiments/transformer.sh
 
 # run script
 
-sbatch --partition=shared-gpu-EL7 --gres=gpu:1 --time=12:00:00 transformer.sh
+sbatch --partition=shared-gpu-EL7 --gres=gpu:1 --time=12:00:00 --output=/home/kabbach/transformer.out /home/kabbach/ortografix/experiments/transformer.sh
+
+sbatch \
+--partition=shared-gpu-EL7 \
+--gres=gpu:1 \
+--time=12:00:00 \
+--output=/home/kabbach/attention-gru-1024-3l-30e.out \
+/home/kabbach/ortografix/experiments/attention.sh
+
+sbatch \
+--partition=shared-gpu-EL7 \
+--gres=gpu:1 \
+--time=12:00:00 \
+--output=/home/kabbach/reverse-gru-128-10e.out \
+/home/kabbach/ortografix/experiments/reverse.sh
+
+sbatch \
+--partition=shared-gpu-EL7 \
+--gres=gpu:1 \
+--time=12:00:00 \
+--output=/home/kabbach/transformer-512-2l-1h-50e.out \
+/home/kabbach/ortografix/experiments/transformer.sh
 
 # script content:
+
+#!/bin/sh Don't forget this at the beginning!!
 
 echo "I: full hostname: $(hostname -f)"
 
