@@ -192,7 +192,10 @@ def _train(encoder, decoder, indexed_pairs, max_seq_len, num_epochs,
     start = time.time()
     print_loss_total = 0  # Reset every print_every
     num_iter = 0
-    num_total_iters = len(indexed_pairs) * num_epochs
+    num_total_iters = sum(1 for source_indexes, target_indexes in indexed_pairs
+                          for _ in range(0, min(len(source_indexes),
+                                                len(target_indexes)),
+                                         max_seq_len)) * num_epochs
     for epoch in range(1, num_epochs+1):
         for source_indexes, target_indexes in indexed_pairs:
             last_decoder_pred_idx = const.SOS_IDX
